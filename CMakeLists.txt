@@ -30,5 +30,5 @@ target_link_libraries(trial PUBLIC Catch ImageSegmentation Falaise::FalaiseModul
 
 # CTest comand
 add_test(NAME trial
-  COMMAND trial 
+  COMMAND trial -s
 )
