@@ -3,10 +3,13 @@
 #include <vector>
 #include <list>
 #include <unordered_map>
+// #include <iostream>
 
 std::vector<bool> image() {
   // hard-coded image data provider
   // 6 rows, 5 columns
+  int w = 5;
+  int h = 6;
   unsigned int input[6][5] =  {{1,0,0,0,1},
 			       {1,1,0,1,1},
 			       {0,1,0,0,1},
@@ -57,14 +60,17 @@ bool check_label_split(){
 }
 
 int check_label_n_split(){
-  std::vector<bool> im = image();
+  std::vector<int> values;
+  std::vector<bool> fullim = image();
   int w = 5;
   int h = 6;
   ImageLabel labels(w,h);
-  if (labels.is_splitting(im))
-    std::vector<int> values = labels.split_at();
-  else
-    std::vector<int> values; // empty
+  labels.label(fullim);
+  std::list<std::vector<bool> > icollection = labels.imagecollection();
+  for (auto& im : icollection) {
+    if (labels.is_splitting(im)) 
+      values = labels.split_at();
+  }
   unsigned int value = values.size();
   return value;
 }
@@ -81,7 +87,7 @@ unsigned int check_label_labels(){
     if (it->first == 2)
       plist = it->second;
   }
-  unsigned int value = plist.size()
+  unsigned int value = plist.size();
   return value;
 }
 
@@ -93,7 +99,7 @@ unsigned int check_iseg_clusters(){
   ImageSegmentation iseg(w,h);
   iseg.cluster(im);
   std::unordered_map<unsigned int, std::list<Pixel> > cls = iseg.getClusters();
-  unsigned int value = cls.size()
+  unsigned int value = cls.size();
   return value;
 }
 

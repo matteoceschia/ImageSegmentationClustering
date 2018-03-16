@@ -34,13 +34,19 @@ void ImageSegmentation::cluster(std::vector<bool> data) {
 
       // check first for all complex segmentation
       spoints = labels->split_at();
-      if (spoints.size()>1) // needs different clusterer
+      if (spoints.size()>1) { // needs different clusterer
+	//	std::cout << "split points size " << spoints.size() << std::endl;
 	goToGraph = true; //complex segmentation
-
+      }
+      bool crossing = false;
       for (auto& sp : labels->splitpoints()) { // std::pair output
 	//	std::cout << "split points: (" << std::get<0>(sp) << "," << std::get<1>(sp) << ")" << std::endl;
-	if (sp==test1 || (sp==test2 && sp==test3)) // needs different clusterer
+	if (sp==test1) // needs different clusterer
 	  goToGraph = true; // complex segmentation
+	if ((crossing && sp==test3) || (crossing && sp==test2)) // crossing tracks
+	  goToGraph = true; // complex segmentation
+	if (sp==test2 || sp==test3)
+	  crossing = true; // half the condition at a first pass
 	if (std::get<0>(sp)>2 || std::get<1>(sp)>2) // more than 2 structures found
 	  goToGraph = true; // complex segmentation
       }
@@ -195,7 +201,6 @@ bool ImageLabel::is_splitting(std::vector<bool> data) {
   std::vector<bool> left;
   std::vector<bool> right;
   int nleft, nright;
-  int leftstate, rightstate;
   int copywidth = width;
   // slice image at column
   for (int cut=1; cut<copywidth; cut++) {
@@ -219,19 +224,12 @@ bool ImageLabel::is_splitting(std::vector<bool> data) {
     splits.push_back(std::make_pair(nleft, nright)); // counts from 0
 
     if (nleft>0 && nright>0) { // any data at all?
-      if (!split) { // set true only once
-	if(nleft>nright || nleft<nright) { // not equal somewhere = a split
-	  split = true;
-	  splitcolumn.push_back(cut-1); // access container from 0 index
-	  partial_left = dummy_left; // store in case
-	  partial_right = dummy_right; // store
-	  leftstate = nleft;
-	  rightstate = nright;
-	}
-      }
-      else { // check on further state changes after first split
-	if (nleft != leftstate || nright != rightstate) {
-	  splitcolumn.push_back(cut-1); // more than one entry in container
+      if(nleft>nright || nleft<nright) { // not equal somewhere = a split
+	split = true;
+	splitcolumn.push_back(cut-1); // access container from 0 index
+	if (splitcolumn.size()<2) {
+	  partial_left = dummy_left; // store in case of single split,
+	  partial_right = dummy_right; // first split only
 	}
       }
     }
