@@ -2,7 +2,7 @@
 
 
 Yorck Ramachers (Warwick)
-Last updated March 9, 2018
+Last updated April 4, 2018
 
 The ImageSegmentation module is a reconstruction module. It attempts to
 cluster tracker hits and fill the TCD data bank in Falaise in the current
