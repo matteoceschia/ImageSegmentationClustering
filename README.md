@@ -210,3 +210,44 @@ Finishing off, all nodes in each shortest path cluster are transformed back
 into collections of tracker pixels and numbered as clusters in a map
 container, ready to be turned back into geiger hit collections by the utility
 function image2gg. 
+
+## Utilities
+
+The image segmentation library contains three utility objects which might or
+might not be of more general interest. 
+
+The GG2ImageConverter object takes in geiger hits in the simplest but
+sufficient form as a vector of meta 
+information, where meta information consists of three integers which are
+sufficient to uniquely identify a geiger hit, side, row and column. One member
+function then converts geiger hits to an image which is stored in the most
+compact format as a vector of bools with each bit corresponding to an image
+pixel, being either on or off. The idea is to use this function to work on
+tracker sides separately hence left and right side tracker images are
+delivered. 
+
+The second member function, image2gg converts images back to geiger
+hit collections, stored in a map with a counting index since these are
+designed to be clusters. It is hence not a direct inverse of the first
+function from above.
+
+The ImageLabel object does most of the image segmentation work for the image
+segmentation algorithm from above, (A). Representing a general image label
+algorithm, it offers several convenience functions but works otherwise
+identically to, for instance, the label function in the scipy ndimage python
+library. Connected pixels are defined as neighbours where neighbours include
+pixels on the diagonals.
+
+Finally, the graph object is a specialised graph object structure, chosen to
+be as simple as possible since very little is asked of it. Only member
+functions delivering simple node properties and a shortest path algorithm are
+required. Therefore, the (undirected) graph is specialised to hold only
+integer data and keep therefore path and other algorithms as simple as
+possible. This is possible since all the more complex data for the image
+segmentation is outsourced to a fixed and countable node container outside the
+graph object such that the identification of nodes can proceed entirely on the
+basis of indices originating from that node container.
+
+The image segmentation library requires no external libraries other than
+C++11 standard libraries for any of the objects it contains.
+
