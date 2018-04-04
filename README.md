@@ -192,14 +192,14 @@ graph. This is the point where clusters are formed hence it is vital not to
 loose sensible start and end points. Taking all means forming a lot of paths
 which are then each turned into a cluster. However, it also means the true
 clusters have to be in the set of solutions. Defining start and end points is
-easy when try to capture all, i.e. every node on the periphery of the tracker
+easy when trying to capture all, i.e. every node on the periphery of the tracker
 grid is a candidate as is every singly connected node, i.e. a node with a
 single edge attached. The latter captures all cases where tracks start/end anywhere
 inside the tracker grid.
 
 Forming a shortest path from start to end then is a purely abstract operation
-between nodes, i.e. no notion of geometry other than that nodes are neighbours
-hence are connected enters. The clustering doesn't know anything about
+between nodes, i.e. no notion of geometry enters other than that nodes are neighbours
+hence are connected. The clustering doesn't know anything about
 concepts of straight or curved or kinked and all edges have the same weight
 hence no discrimination of going up or down against horizontal nodes like in a
 grid geometry is permitted. The shortest path is hence abstract and the
