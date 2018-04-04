@@ -37,6 +37,9 @@ $ make
 ...
 ... If you are developing the module, you can test it by calling
 $ make test
+...
+... or obtain more detail on the tests and launch in the build directory
+$ ctest -V
 ```
 
 Note: if you get a QT5 error, you may need to specify the QT5 path when you run the cmake line, as given by `brew --prefix qt5-base`. For example, you can run:
@@ -84,7 +87,8 @@ object itself rather than bringing in a redundant middle-man 'driver'
 object. 
 
 This module also attempts a first use of the Catch test framework for Falaise
-modules. 
+modules. All unit tests address the algorithm only, not the Falaise module
+structure nor the embedding of this module into flreconstruct.
 
 ## Algorithms: (A) Connected structure search
 
@@ -151,4 +155,58 @@ possible but with the certainty of not loosing any true hits under any
 circumstances. 
 
 ## Algorithms: (B) Graph clustering for more complex cases
-Not implemented yet.
+
+Arriving at more complex clustering tasks, the same assumption of simplicity
+prevails, i.e. try not to be too smart but make certain not to loose the true
+clusters. The price to pay is to allow many redundant or non-sensical clusters
+to be formed and get rid of at a later stage in the reconstruction. Track
+fitting for instance would do that quite easily as bad clusters are bound to
+give bad fits.
+
+This algorithm cost is exacerbated in this case of complex structures. If it
+is not clear due to branching and randomly stopping tracks where something
+starts or stops or splits or bounces then the only safe option is to allow for
+all cases hence form a lot of clusters.
+
+A Graph as a data structure is ideal for holding data points and relations
+between them. One can then easily reveal data relations using simple, standard
+methods for graphs. The crucial point for this choice is that very few
+assumptions are required to enter at this stage, none relating to geometry for
+instance. Clustering can be made geometry agnostic and hence cover all cases
+for tracker structure clustering without bias, i.e. stay as dumb as possible.
+
+Transforming the tracker data into an abstract graph structure works as
+follows: (A) Perform one-dimensional clustering to abstract clumps of geiger
+hits into countable nodes. Here every one of the 9 tracker columns in each
+tracker-half is clustered separately into clumps of neighbouring rows of
+activated geiger hits.
+(B) Each integer pair of column number and node container index becomes a node
+in a graph structure. Edges or undirected connections between nodes are drawn
+in case they are neighbours in the tracker cell grid, i.e. in a neighbouring
+column and containing overlapping rows or at most one row shifted away up or
+down, i.e. neighbours on the diagonal.
+
+Once there is a complete graph structure of a tracker event, the algorithm
+tries to determine start and end nodes of all possible shortest paths for that
+graph. This is the point where clusters are formed hence it is vital not to
+loose sensible start and end points. Taking all means forming a lot of paths
+which are then each turned into a cluster. However, it also means the true
+clusters have to be in the set of solutions. Defining start and end points is
+easy when try to capture all, i.e. every node on the periphery of the tracker
+grid is a candidate as is every singly connected node, i.e. a node with a
+single edge attached. The latter captures all cases where tracks start/end anywhere
+inside the tracker grid.
+
+Forming a shortest path from start to end then is a purely abstract operation
+between nodes, i.e. no notion of geometry other than that nodes are neighbours
+hence are connected enters. The clustering doesn't know anything about
+concepts of straight or curved or kinked and all edges have the same weight
+hence no discrimination of going up or down against horizontal nodes like in a
+grid geometry is permitted. The shortest path is hence abstract and the
+algorithm delivers all since several possibilities, equally short, can exist
+between nodes.
+
+Finishing off, all nodes in each shortest path cluster are transformed back
+into collections of tracker pixels and numbered as clusters in a map
+container, ready to be turned back into geiger hit collections by the utility
+function image2gg. 
