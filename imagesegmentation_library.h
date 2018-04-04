@@ -78,7 +78,7 @@ class Graph
   // for simple usage as a pure helper class.
 private:
   int V; // number of vertices
-  int INT_MAX;
+  int MAXINT;
   
   std::vector<std::unordered_set<int>> adj; // adjacency lists
   
