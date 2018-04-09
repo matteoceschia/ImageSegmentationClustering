@@ -57,7 +57,7 @@ void ImageSegmentation::cluster(std::vector<bool> data) {
 
       std::cout << "done is_splitting with graph flag at " << goToGraph << std::endl;
       if (goToGraph) { // try clustering elsewhere
-	gr->cluster(data); // fill clusters
+	gr->cluster(im); // fill clusters
 	cls = gr->getClusters();
       }
       else { // try clustering here; simple enough structure
