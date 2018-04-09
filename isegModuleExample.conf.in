@@ -10,7 +10,7 @@
 # the snemo::processing namespace
 [name="flreconstruct.plugins" type="flreconstruct::section"]
 plugins : string[1] = "ImageSegmentation"
-ImageSegmentation.directory : string = "/storage/epp2/phsdaq/Sandbox/Falaise/sysworkdir/ImageSegmentation/build"
+ImageSegmentation.directory : string = "@PROJECT_BINARY_DIR@"
 
 # Must define "pipeline" as this is the module flreconstruct will use
 # Define the modules in the pipeline:

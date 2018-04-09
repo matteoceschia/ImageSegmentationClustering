@@ -21,6 +21,9 @@ add_library(ISegAlgorithm SHARED imagesegmentation_library.h
 			  imagesegmentation_library.cpp)
 
 
+# Configure example pipeline script for use from the build dir
+configure_file("isegModuleExample.conf.in" "isegModuleExample.conf" @ONLY)
+
 # Build the testing code, tell CTest about it
 enable_testing()
 set(CMAKE_CXX_STANDARD 11)
