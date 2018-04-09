@@ -147,6 +147,19 @@ unsigned int check_cluster_contentB(){
 }
 
 
+unsigned int check_iseg_chain(){
+  std::vector<bool> im = image2();
+  int w = 5;
+  int h = 6;
+
+  ImageSegmentation iseg(w,h);
+  iseg.cluster(im);
+  std::unordered_map<unsigned int, std::list<Pixel> > cls = iseg.getClusters();
+  unsigned int value = cls.size();
+
+  return value;
+}
+
 
 TEST_CASE( "Graph Data in", "[falaise][iseglib][grdata_in]" ) {
   REQUIRE( check_image() == 30 );
@@ -174,5 +187,9 @@ TEST_CASE( "Graph cluster contentA", "[falaise][graphcluster][clustercontentA]" 
 
 TEST_CASE( "Graph cluster contentB", "[falaise][graphcluster][clustercontentB]" ) {
   REQUIRE( check_cluster_contentB() == 8 );
+}
+
+TEST_CASE( "ISegmentation N clustersB", "[falaise][label][nclustersB]" ) {
+  REQUIRE( check_iseg_chain() == 10 );
 }
 
