@@ -89,6 +89,9 @@ void ImageSegmentation::cluster(std::vector<bool> data) {
 
       }
     }
+//     else
+//       std::cout << "no splitting" << std::endl;
+
     // simple clusters already in cls
     clscollection.push_back(cls); // basket collection
     goToGraph = false;
@@ -503,7 +506,12 @@ bool ImageLabel::is_splitting(std::vector<bool> data) {
 	  partial_right = dummy_right; // first split only
 	}
       }
+      if(nleft>1 && nright>1) { // both sides too much structure
+	split = true;
+	splitcolumn.push_back(cut-1); // access container from 0 index
+      }
     }
+    //    std::cout << "split points: (" << nleft << "," << nright << "); split=" << split << std::endl;
     left.clear();
     right.clear();
     dummy_left.clear();
