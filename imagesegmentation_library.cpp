@@ -1057,10 +1057,16 @@ VectorXd ClusterCleanup::pca2d(const Matrix<double, Dynamic, 2>& data, int point
   // Eigenvectors and eigenvalues
   SelfAdjointEigenSolver<MatrixXd> eigensolver(cov);
 
-  if (eigensolver.info() != Success) abort();
-
-  VectorXd eval = eigensolver.eigenvalues().real();
-  return eval;
+  if (eigensolver.info() != Success) {
+    //abort(); carry on
+    VectorXd eval(2);
+    eval << 0, 1; // fill with dummy extremes to pass cut
+    return eval;
+  }
+  else {
+    VectorXd eval = eigensolver.eigenvalues().real();
+    return eval;
+  }
 }
 
 
