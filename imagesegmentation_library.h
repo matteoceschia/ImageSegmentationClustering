@@ -7,8 +7,14 @@
 #include <set>
 #include <unordered_set>
 #include <vector>
+#include <valarray>
 #include <utility>
 
+// Eigen3
+#include <Eigen/Dense>
+using namespace Eigen;
+
+#define DUMMY 11111
 
 // MetaInfo translates uniquely to Geiger Hit
 struct MetaInfo {int side; int row; int column;};
@@ -218,6 +224,56 @@ public:
 
   // clusters must come from imagelabel object
   std::unordered_map<unsigned int, std::vector<MetaInfo> > image2gg(std::vector<MetaInfo> data, std::unordered_map<unsigned int, std::list<Pixel> > labels, int side);
+
+};
+
+
+//**********************
+// modify cluster map by
+// (a) remove projection effects in z - split clusters that only appear as one
+// (b) remove clusters that are too non-straight with pca in 2d
+//**********************
+class ClusterCleanup {
+
+private:
+  double threshold; // PCA ratio threshold
+  double stepwidth; // half resolution in z
+  std::vector<unsigned int> accepted; // accepted cluster id's
+  std::unordered_map<unsigned int, std::vector<MetaInfo> > clusters;
+
+
+protected:
+  VectorXd pca2d(const Matrix<double, Dynamic, 2>& data, int points);
+  void checkAcceptance(const VectorXd& ev, unsigned int id);
+  void zSplit(unsigned int clsid, std::vector<MetaInfo>& cls);
+  double histogramSplit(std::valarray<double>& zdata, double start, double end);
+  void zSplitCluster(unsigned int id, double zlimit);
+  void consolidate(); // use accepted ids to modify cluster map
+
+
+public:
+
+  ClusterCleanup() {
+    threshold = 0.9; // 90% default pca axis ratio
+    stepwidth = 5.0; // minimum z-step half-width
+  } // default constructor
+
+  ~ClusterCleanup() {
+    accepted.clear();
+    clusters.clear();
+  }
+
+  // init and setting functions
+  void init(std::unordered_map<unsigned int, std::vector<MetaInfo> > cls); // full info clusters
+  void setPCAAcceptanceThreshold(double thresh) {threshold = thresh;}
+  void setZResolution(double res) {stepwidth = res*0.5;} // half resolution in z
+
+  // action functions
+  void zSplitter(); // remove projection effects for clusters from image
+  void runPCAonImage(); // 2D PCA on image data
+
+  // output, cleaned cluster collection
+  std::unordered_map<unsigned int, std::vector<MetaInfo> > getClusters() {return clusters;}
 
 };
 
