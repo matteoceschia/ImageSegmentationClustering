@@ -621,6 +621,7 @@ std::unordered_map<unsigned int, std::vector<MetaInfo> > GG2ImageConverter::imag
 	  hit.side = mi.side;
 	  hit.row = mi.row;
 	  hit.column = mi.column;
+	  hit.z   = mi.z;
 	  hits.push_back(hit);
 	}
       }

@@ -17,7 +17,7 @@ using namespace Eigen;
 #define DUMMY 11111
 
 // MetaInfo translates uniquely to Geiger Hit
-struct MetaInfo {int side; int row; int column;};
+struct MetaInfo {int side; int row; int column; double z;};
 struct Pixel {int x; int y;}; // x=column, y=row
 
 
