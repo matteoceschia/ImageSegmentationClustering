@@ -842,13 +842,14 @@ void ClusterCleanup::zSplit(unsigned int clsid, std::vector<MetaInfo>& cls) {
     allz[i] = mi.z;
     i++;
   }
+  if (i<=6) return; // not enough data points to fill rough histogram
   double start = allz.min();
   double end   = allz.max();
-  //  std::cout << "zSplit, start z " << start << " end " << end << std::endl;
+  std::cout << "zSplit, start z " << start << " end " << end << std::endl;
   
   // Case 1: check all z values on global gap  
   double zlimit = histogramSplit(allz, start, end);
-  //  std::cout << "case 1: zlimit = " << zlimit << std::endl;
+  std::cout << "case 1: zlimit = " << zlimit << std::endl;
 
   if (zlimit != DUMMY) {
     zSplitCluster(clsid, zlimit);
@@ -857,86 +858,86 @@ void ClusterCleanup::zSplit(unsigned int clsid, std::vector<MetaInfo>& cls) {
   
   // Case 2: could still split in z, check z-overlap at ends
   // Case 2: from minimum column to maximum column
-  std::vector<MetaInfo> newcls; // dummy storage
-  std::vector<MetaInfo> modcls; // dummy storage
+//   std::vector<MetaInfo> newcls; // dummy storage
+//   std::vector<MetaInfo> modcls; // dummy storage
 
-  Array<double, Dynamic, 3> Data; // cluster data container, nx3 array
-  Data.resize(cls.size(), NoChange); 
+//   Array<double, Dynamic, 3> Data; // cluster data container, nx3 array
+//   Data.resize(cls.size(), NoChange); 
   
-  i = 0;
-  for (MetaInfo& mi : cls) { // fill 3 columns
-    Data(i,0) = (double)mi.column; // Hit x
-    Data(i,1) = (double)mi.row;    // y
-    Data(i,2) = mi.z;              // z
-    i++;
-  }
-  int mincol = Data.col(0).minCoeff(); // possible 0-8
-  int maxcol = Data.col(0).maxCoeff();
+//   i = 0;
+//   for (MetaInfo& mi : cls) { // fill 3 columns
+//     Data(i,0) = (double)mi.column; // Hit x
+//     Data(i,1) = (double)mi.row;    // y
+//     Data(i,2) = mi.z;              // z
+//     i++;
+//   }
+//   int mincol = Data.col(0).minCoeff(); // possible 0-8
+//   int maxcol = Data.col(0).maxCoeff();
 
-  int currentcolumn = mincol;
-  double zl;
-  MetaInfo minfo;
-  minfo.side = cls.at(0).side; // all on one side
-  bool issplit = false;
-  while (currentcolumn <= maxcol) {
-    i = 0;
-    for (int j=0;j<Data.rows();j++) {
-      if (Data(j,0)==currentcolumn) {
-	zarray.push_back(Data(j,2)); // store z value
-	i++;
-      }
-    }
-    allz.resize(i);
-    for (unsigned int n=0;n<zarray.size();n++)
-      allz[n]=zarray[n];
-    zarray.clear();
+//   int currentcolumn = mincol;
+//   double zl;
+//   MetaInfo minfo;
+//   minfo.side = cls.at(0).side; // all on one side
+//   bool issplit = false;
+//   while (currentcolumn <= maxcol) {
+//     i = 0;
+//     for (int j=0;j<Data.rows();j++) {
+//       if (Data(j,0)==currentcolumn) {
+// 	zarray.push_back(Data(j,2)); // store z value
+// 	i++;
+//       }
+//     }
+//     allz.resize(i);
+//     for (unsigned int n=0;n<zarray.size();n++)
+//       allz[n]=zarray[n];
+//     zarray.clear();
 
-    start = allz.min();
-    end   = allz.max();
-    //    std::cout << "case 2: start " << start << " end " << end << std::endl;
-    zl = histogramSplit(allz, start, end);
-    //    std::cout << "case 2 from histosplit: " << zl << std::endl;
-    if (zl == DUMMY) { // no split
-      //      std::cout << "inside no split condition, column " << currentcolumn << std::endl;
-      minfo.column = currentcolumn;
-      for (int j=0;j<Data.rows();j++) {
-	if (Data(j,0)==currentcolumn) {
-	  minfo.z = Data(j,2); // store z value
-	  minfo.row = Data(j,1); // store row
-	  newcls.push_back(minfo); // copy no-split data from cls
-	  modcls.push_back(minfo); // for this z-overlap column
-	}
-      }
-    }
-    else { // split detected
-      //      std::cout << "inside split detected, column " << currentcolumn << std::endl;
-      issplit = true;
-      minfo.column = currentcolumn;
-      for (int j=0;j<Data.rows();j++) {
-	if (Data(j,0)==currentcolumn) {
-	  minfo.row = Data(j,1); // store row
-	  minfo.z = Data(j,2); // store z value
-	  if (minfo.z < zl + stepwidth && minfo.z > zl - stepwidth) { // still overlapping
-	    newcls.push_back(minfo); // copy to common cls
-	    modcls.push_back(minfo); // copy to common cls
-	  }
-	  else if (minfo.z < zl - stepwidth) 
-	    newcls.push_back(minfo); // copy to separate cls
-	  else                       // z>=zlimit+stepwidth
-	    modcls.push_back(minfo); // copy to separate cls
-	}
-      }
-    }
+//     start = allz.min();
+//     end   = allz.max();
+//     std::cout << "case 2: start " << start << " end " << end << std::endl;
+//     zl = histogramSplit(allz, start, end);
+//     std::cout << "case 2 from histosplit: " << zl << std::endl;
+//     if (zl == DUMMY) { // no split
+//       std::cout << "inside no split condition, column " << currentcolumn << std::endl;
+//       minfo.column = currentcolumn;
+//       for (int j=0;j<Data.rows();j++) {
+// 	if (Data(j,0)==currentcolumn) {
+// 	  minfo.z = Data(j,2); // store z value
+// 	  minfo.row = Data(j,1); // store row
+// 	  newcls.push_back(minfo); // copy no-split data from cls
+// 	  modcls.push_back(minfo); // for this z-overlap column
+// 	}
+//       }
+//     }
+//     else { // split detected
+//       std::cout << "inside split detected, column " << currentcolumn << std::endl;
+//       issplit = true;
+//       minfo.column = currentcolumn;
+//       for (int j=0;j<Data.rows();j++) {
+// 	if (Data(j,0)==currentcolumn) {
+// 	  minfo.row = Data(j,1); // store row
+// 	  minfo.z = Data(j,2); // store z value
+// 	  if (minfo.z < zl + stepwidth && minfo.z > zl - stepwidth) { // still overlapping
+// 	    newcls.push_back(minfo); // copy to common cls
+// 	    modcls.push_back(minfo); // copy to common cls
+// 	  }
+// 	  else if (minfo.z < zl - stepwidth) 
+// 	    newcls.push_back(minfo); // copy to separate cls
+// 	  else                       // z>=zlimit+stepwidth
+// 	    modcls.push_back(minfo); // copy to separate cls
+// 	}
+//       }
+//     }
 
-    currentcolumn += 1; // increase towards maxcol
-  }
+//     currentcolumn += 1; // increase towards maxcol
+//   }
   
-  if (issplit) {
+//   if (issplit) {
     // modify cluster collection
-    clusters[clsid] = modcls;
-    clusters[clusters.size()+1] = newcls; // keys count from 1
-    return;
-  }
+//     clusters[clsid] = modcls;
+//     clusters[clusters.size()+1] = newcls; // keys count from 1
+//     return;
+//   }
 }
 
 
@@ -1026,9 +1027,12 @@ void ClusterCleanup::consolidate() {
 
 
 void ClusterCleanup::checkAcceptance(const VectorXd& ev, unsigned int id) {
-  VectorXd evnormed = ev.normalized();
+  double sum = ev[0] + ev[1];
+  //  VectorXd evnormed = ev.normalized();
+  VectorXd evnormed(2);
+  evnormed << ev[0]/sum, ev[1]/sum; // fill with relative fractions
 
-  for (int i=0;i<ev.size();i++) {
+  for (int i=0;i<evnormed.size();i++) {
     std::cout << "Ev normed: " << evnormed[i] << std::endl;
     if (evnormed[i] > threshold) // check for one dominant eigenvalue
       accepted.push_back(id);
