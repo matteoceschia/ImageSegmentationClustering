@@ -179,7 +179,8 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
 	  
 	  // clean up collection
 	  clclean.init(clusters_ll);
-	  clclean.setPCAAcceptanceThreshold(0.85); // 85% threshold
+	  clclean.zSweeper();
+	  clclean.setPCAAcceptanceThreshold(0.95); // 95% threshold
 	  clclean.runPCAonImage(); // method B for clean up
 	  clusters_ll = clclean.getClusters(); // overwrite collection
 
@@ -209,6 +210,7 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
 
 	  // clean up collection
 	  clclean.init(clusters_rr);
+	  clclean.zSweeper();
 	  //      clclean.setPCAAcceptanceThreshold(0.9); // 90% threshold
 	  clclean.runPCAonImage(); // method B for clean up
 	  clusters_rr = clclean.getClusters(); // overwrite collection
@@ -253,6 +255,7 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
 	  
 	  // clean up collection
 	  clclean.init(clusters_ll_delayed);
+	  clclean.zSweeper();
 	  //      clclean.setPCAAcceptanceThreshold(0.9); // 90% threshold
 	  clclean.runPCAonImage(); // method B for clean up
 	  clusters_ll_delayed = clclean.getClusters(); // overwrite collection
@@ -283,6 +286,7 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
 
 	  // clean up collection
 	  clclean.init(clusters_rr_delayed);
+	  clclean.zSweeper();
 	  //      clclean.setPCAAcceptanceThreshold(0.9); // 90% threshold
 	  clclean.runPCAonImage(); // method B for clean up
 	  clusters_rr_delayed = clclean.getClusters(); // overwrite collection
@@ -314,14 +318,16 @@ void imagesegmentation_clustering_module::_translate(const snemo::datamodel::cal
     cluster_handle.grab().set_cluster_id(clustering_solution.get_clusters().size() - 1);
     // identify all cluster image pixels as geiger hits
     for (MetaInfo& val : entry.second) { // loop over std::vector
-      //      std::cout << "translate: Cluster Key: " << entry.first <<" Entry: (" << val.side << ", " << val.column << ", " << val.row << ")" << std::endl;
+      //      std::cout << "translate: Cluster Key: " << entry.first <<" Entry: (" << val.side << ", " << val.column << ", " << val.row << ", " << val.z << ")" << std::endl;
       for (const sdm::calibrated_data::tracker_hit_handle_type& gg_handle : the_calibrated_data.calibrated_tracker_hits()) {
 	if (! gg_handle) continue;
 	const sdm::calibrated_tracker_hit & snemo_gg_hit = gg_handle.get();
 	mi.side   = snemo_gg_hit.get_geom_id().get(1);
 	mi.row    = snemo_gg_hit.get_geom_id().get(3);
 	mi.column = snemo_gg_hit.get_geom_id().get(2);
-	if (val.side==mi.side && val.row==mi.row && val.column==mi.column) {
+	mi.z      = snemo_gg_hit.get_z();
+	// check coordinates for identification and resolution interval around z
+	if (val.side==mi.side && val.row==mi.row && val.column==mi.column && mi.z>=val.z-5.0 && mi.z<=val.z+5.0) {
 	  cluster_handle.grab().grab_hits().push_back(gg_handle); // found, store in cluster
 	}
       }

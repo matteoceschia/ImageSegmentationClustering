@@ -833,6 +833,13 @@ void ClusterCleanup::zSplitter() {
 }
 
 
+void ClusterCleanup::zSweeper() {
+  // access existing clusters internally
+  for (auto& entry : clusters) 
+    histogramSweeper(entry.first);
+}
+
+
 void ClusterCleanup::zSplit(unsigned int clsid, std::vector<MetaInfo>& cls) {
   // find discontinuity in z
   std::vector<double> zarray; // re-initialising valarray
@@ -845,99 +852,16 @@ void ClusterCleanup::zSplit(unsigned int clsid, std::vector<MetaInfo>& cls) {
   if (i<=6) return; // not enough data points to fill rough histogram
   double start = allz.min();
   double end   = allz.max();
-  std::cout << "zSplit, start z " << start << " end " << end << std::endl;
+  //  std::cout << "zSplit, start z " << start << " end " << end << std::endl;
   
   // Case 1: check all z values on global gap  
   double zlimit = histogramSplit(allz, start, end);
-  std::cout << "case 1: zlimit = " << zlimit << std::endl;
+  //  std::cout << "case 1: zlimit = " << zlimit << std::endl;
 
   if (zlimit != DUMMY) {
     zSplitCluster(clsid, zlimit);
     return;
   }
-  
-  // Case 2: could still split in z, check z-overlap at ends
-  // Case 2: from minimum column to maximum column
-//   std::vector<MetaInfo> newcls; // dummy storage
-//   std::vector<MetaInfo> modcls; // dummy storage
-
-//   Array<double, Dynamic, 3> Data; // cluster data container, nx3 array
-//   Data.resize(cls.size(), NoChange); 
-  
-//   i = 0;
-//   for (MetaInfo& mi : cls) { // fill 3 columns
-//     Data(i,0) = (double)mi.column; // Hit x
-//     Data(i,1) = (double)mi.row;    // y
-//     Data(i,2) = mi.z;              // z
-//     i++;
-//   }
-//   int mincol = Data.col(0).minCoeff(); // possible 0-8
-//   int maxcol = Data.col(0).maxCoeff();
-
-//   int currentcolumn = mincol;
-//   double zl;
-//   MetaInfo minfo;
-//   minfo.side = cls.at(0).side; // all on one side
-//   bool issplit = false;
-//   while (currentcolumn <= maxcol) {
-//     i = 0;
-//     for (int j=0;j<Data.rows();j++) {
-//       if (Data(j,0)==currentcolumn) {
-// 	zarray.push_back(Data(j,2)); // store z value
-// 	i++;
-//       }
-//     }
-//     allz.resize(i);
-//     for (unsigned int n=0;n<zarray.size();n++)
-//       allz[n]=zarray[n];
-//     zarray.clear();
-
-//     start = allz.min();
-//     end   = allz.max();
-//     std::cout << "case 2: start " << start << " end " << end << std::endl;
-//     zl = histogramSplit(allz, start, end);
-//     std::cout << "case 2 from histosplit: " << zl << std::endl;
-//     if (zl == DUMMY) { // no split
-//       std::cout << "inside no split condition, column " << currentcolumn << std::endl;
-//       minfo.column = currentcolumn;
-//       for (int j=0;j<Data.rows();j++) {
-// 	if (Data(j,0)==currentcolumn) {
-// 	  minfo.z = Data(j,2); // store z value
-// 	  minfo.row = Data(j,1); // store row
-// 	  newcls.push_back(minfo); // copy no-split data from cls
-// 	  modcls.push_back(minfo); // for this z-overlap column
-// 	}
-//       }
-//     }
-//     else { // split detected
-//       std::cout << "inside split detected, column " << currentcolumn << std::endl;
-//       issplit = true;
-//       minfo.column = currentcolumn;
-//       for (int j=0;j<Data.rows();j++) {
-// 	if (Data(j,0)==currentcolumn) {
-// 	  minfo.row = Data(j,1); // store row
-// 	  minfo.z = Data(j,2); // store z value
-// 	  if (minfo.z < zl + stepwidth && minfo.z > zl - stepwidth) { // still overlapping
-// 	    newcls.push_back(minfo); // copy to common cls
-// 	    modcls.push_back(minfo); // copy to common cls
-// 	  }
-// 	  else if (minfo.z < zl - stepwidth) 
-// 	    newcls.push_back(minfo); // copy to separate cls
-// 	  else                       // z>=zlimit+stepwidth
-// 	    modcls.push_back(minfo); // copy to separate cls
-// 	}
-//       }
-//     }
-
-//     currentcolumn += 1; // increase towards maxcol
-//   }
-  
-//   if (issplit) {
-    // modify cluster collection
-//     clusters[clsid] = modcls;
-//     clusters[clusters.size()+1] = newcls; // keys count from 1
-//     return;
-//   }
 }
 
 
@@ -956,16 +880,20 @@ void ClusterCleanup::zSplitCluster(unsigned int id, double zlimit) {
       newcls.push_back(mi);
       keepElement.push_back(i);
     }
-    else if (z <= zlimit - stepwidth)  // outside below zlimit, into newcls
+    else if (z <= zlimit - stepwidth) { // outside below zlimit, into newcls
       newcls.push_back(mi);
+      //      std::cout << "newcls z = " << z << std::endl;
+    }
     else                       // z>=zlimit+stepwidth
       keepElement.push_back(i);
     i++;
   }
 
   std::vector<MetaInfo> modcls; // dummy storage
-  for (int which : keepElement)
+  for (int which : keepElement) {
     modcls.push_back(cls.at(which));
+    //    std::cout << "modcls z = " << cls.at(which).z << std::endl;
+  }
 
   // modify cluster collection
   clusters[id] = modcls;
@@ -1011,6 +939,73 @@ double ClusterCleanup::histogramSplit(std::valarray<double>& allz, double start,
 }
 
 
+void ClusterCleanup::histogramSweeper(unsigned int clsid) {
+  std::vector<MetaInfo> cls = clusters[clsid];
+
+  // discretize z-axis
+  std::valarray<double> allz(cls.size()); // for finding extremes
+  int i=0;
+  for (auto& mi : cls) {
+    allz[i] = mi.z;
+    i++;
+  }
+  double start = allz.min();
+  double end   = allz.max();
+
+  int nbins = 6; // coarse histogram resolution in z, avoid gaps
+  if (i<=nbins) return; // not enough data points to fill rough histogram
+  std::vector<MetaInfo> newcls;
+
+  double step = fabs((end - start)/nbins);
+  if (fabs((end - start)/stepwidth) <= 1.0) return; // nothing to do
+
+  std::vector<int> histogram(nbins+1, 0); // fill with zero
+
+  for (int j=0;j<(int)allz.size();j++) { // for all z
+    int bucket = (int)floor((cls[j].z - start) / step); // which bin
+    histogram[bucket] += 1; // increment
+  }
+
+  int sum1 = 0;
+  int sum2 = 0;
+  std::vector<int>::iterator it;
+  it = find(histogram.begin(), histogram.end(), 0);
+  if (it != histogram.end()) { // found a zero in the histogram, a gap
+    int pos = it - histogram.begin(); // index of first zero in histo
+
+    for (int jj=0;jj<pos;jj++) sum1+=histogram[jj];
+
+    std::reverse(histogram.begin(), histogram.end()); // check for zero from the other end
+    it = find(histogram.begin(), histogram.end(), 0);
+    int pos2 = histogram.size() - (it-histogram.begin()); // index of last zero in histo
+
+    for (int jj=0;jj<pos2;jj++) sum2+=histogram[jj]; // histo has been reversed, add from 0
+
+    double loc = (pos+pos2)/2.0; // average index position
+    double zlimit = loc * step + start;
+
+    //    std::cout << "in sweeper, found split: entries below zlimit = " << sum1 << " entries above = " << sum2 << std::endl;
+    // which side of zlimit to keep?
+    bool keep_below_zlimit = false;
+    if (sum1 < sum2)
+      keep_below_zlimit = false;
+    else
+      keep_below_zlimit = true;
+    
+    // remove the small number of wrong z entries in clusters from x,y copies
+    for (auto& mi : cls) {
+      if (keep_below_zlimit && mi.z<zlimit)
+	newcls.push_back(mi);
+      if (!keep_below_zlimit && mi.z>zlimit)
+	newcls.push_back(mi);
+    }
+    clusters[clsid] = newcls; // overwrite clusters after sweep
+  }
+  else 
+    return; // nothing to do
+}
+
+
 void ClusterCleanup::consolidate() {
   std::unordered_map<unsigned int, std::vector<MetaInfo> > newcls; // dummy storage
   unsigned int counter = 1; // cluster keys start from 1
@@ -1033,7 +1028,7 @@ void ClusterCleanup::checkAcceptance(const VectorXd& ev, unsigned int id) {
   evnormed << ev[0]/sum, ev[1]/sum; // fill with relative fractions
 
   for (int i=0;i<evnormed.size();i++) {
-    std::cout << "Ev normed: " << evnormed[i] << std::endl;
+    //    std::cout << "Ev normed: " << evnormed[i] << std::endl;
     if (evnormed[i] > threshold) // check for one dominant eigenvalue
       accepted.push_back(id);
   }

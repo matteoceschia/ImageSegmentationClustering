@@ -249,7 +249,7 @@ protected:
   double histogramSplit(std::valarray<double>& zdata, double start, double end);
   void zSplitCluster(unsigned int id, double zlimit);
   void consolidate(); // use accepted ids to modify cluster map
-
+  void histogramSweeper(unsigned int clsid);
 
 public:
 
@@ -270,6 +270,7 @@ public:
 
   // action functions
   void zSplitter(); // remove projection effects for clusters from image
+  void zSweeper(); // cleanup double booked pixels with wrong z
   void runPCAonImage(); // 2D PCA on image data
 
   // output, cleaned cluster collection
