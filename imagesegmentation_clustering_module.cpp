@@ -27,7 +27,8 @@ void imagesegmentation_clustering_module::initialize(const datatools::properties
 
   // Clustering algorithm :
   iseg = new ImageSegmentation(9,113); // tracker planes 113 by 9 by 2 sides
-  
+
+  eventCounter = 0;
   this->_set_initialized(true);
 
   return;
@@ -45,6 +46,7 @@ void imagesegmentation_clustering_module::reset()
   if (iseg) {
     delete iseg;
   }
+  eventCounter = 0;
   std::cout << "Image segmentation clustering finished." << std::endl;
   return;
 }
@@ -120,7 +122,10 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
 
 
   // Process geiger hits for clustering
+  std::cout << "In process: event counter = " << eventCounter << std::endl;
+
   // geiger hits to image
+  bool delayed = false;
   MetaInfo mi;
   std::vector<MetaInfo> gg_data; // divide in prompt and delayed hits
   std::vector<MetaInfo> gg_data_delayed;
@@ -157,6 +162,17 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
     ilab.label(rr); // right side
     std::unordered_map<unsigned int, std::list<Pixel> > labels_right = ilab.getLabels();
 
+    // print left
+//     std::cout << "First labels left" << std::endl;
+//     std::list<Pixel> plist;
+//       std::vector<MetaInfo> milist;
+//     for (std::unordered_map<unsigned int, std::list<Pixel> >::iterator it=labels_left.begin(); it!=labels_left.end(); ++it) {
+//       std::cout << it->first << " => " << '\n';
+//       plist = it->second;
+//       for (Pixel& pp: plist)
+// 	std::cout << pp.y << " " << pp.x << std::endl;
+//     }
+
     // back to meta info
     if (labels_left.size()>0) {
       std::unordered_map<unsigned int, std::vector<MetaInfo> > label_cls_left = g2i.image2gg(gg_data, labels_left, 0);
@@ -164,6 +180,16 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
       //      clclean.setZResolution(10.0); // [mm] z resolution
       clclean.zSplitter(); // method A for clean up
       label_cls_left = clclean.getClusters(); // overwrite collection
+
+      // print this
+//       std::cout << "after zSplitter:" << std::endl;
+//       std::cout << "N clusters: " << label_cls_left.size() << std::endl;
+//       for (auto& entry : label_cls_left) {
+// 	std::cout << "key=" << entry.first << " => " << '\n';
+// 	milist = entry.second;
+// 	for (MetaInfo& mi: milist)
+// 	  std::cout << mi.side << " " << mi.row << " " << mi.column << " " << mi.z << std::endl;
+//       }
 
       // for each pre clustered
       for (auto& entry: label_cls_left) {
@@ -179,22 +205,40 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
 	  
 	  // clean up collection
 	  clclean.init(clusters_ll);
-	  clclean.zSweeper();
-	  clclean.setPCAAcceptanceThreshold(0.95); // 95% threshold
-	  clclean.runPCAonImage(); // method B for clean up
+	  //	  clclean.zSweeper();
+	  //	  clclean.setPCAAcceptanceThreshold(0.90); // 90% threshold
+	  //	  clclean.runPCAonImage(); // method B for clean up
 	  clusters_ll = clclean.getClusters(); // overwrite collection
 
 	  // store in clustering solution
-	  _translate(the_calibrated_data, clustering_solution, clusters_ll);
+	  _translate(the_calibrated_data, clustering_solution, clusters_ll, delayed);
 	}
       }
     }
+    // print left
+//     std::cout << "Labels right" << std::endl;
+//     for (std::unordered_map<unsigned int, std::list<Pixel> >::iterator it=labels_left.begin(); it!=labels_left.end(); ++it) {
+//       std::cout << it->first << " => " << '\n';
+//       plist = it->second;
+//       for (Pixel& pp: plist)
+// 	std::cout << pp.y << " " << pp.x << std::endl;
+//     }
     if (labels_right.size()>0) {
       std::unordered_map<unsigned int, std::vector<MetaInfo> > label_cls_right = g2i.image2gg(gg_data, labels_right, 1);
       clclean.init(label_cls_right);
       //      clclean.setZResolution(10.0); // [mm] z resolution
       clclean.zSplitter(); // method A for clean up
       label_cls_right = clclean.getClusters(); // overwrite collection
+
+      // print this
+//       std::cout << "after zSplitter:" << std::endl;
+//       std::cout << "N clusters: " << label_cls_right.size() << std::endl;
+//       for (auto& entry : label_cls_right) {
+// 	std::cout << "key=" << entry.first << " => " << '\n';
+// 	milist = entry.second;
+// 	for (MetaInfo& mi: milist)
+// 	  std::cout << mi.side << " " << mi.row << " " << mi.column << " " << mi.z << std::endl;
+//       }
 
       // for each pre clustered
       for (auto& entry: label_cls_right) {
@@ -210,18 +254,19 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
 
 	  // clean up collection
 	  clclean.init(clusters_rr);
-	  clclean.zSweeper();
+	  //	  clclean.zSweeper();
 	  //      clclean.setPCAAcceptanceThreshold(0.9); // 90% threshold
-	  clclean.runPCAonImage(); // method B for clean up
+	  //	  clclean.runPCAonImage(); // method B for clean up
 	  clusters_rr = clclean.getClusters(); // overwrite collection
 
 	  // store in clustering solution
-	  _translate(the_calibrated_data, clustering_solution, clusters_rr);
+	  _translate(the_calibrated_data, clustering_solution, clusters_rr, delayed);
 	}
       }
     }    
   }
   if (gg_data_delayed.size()>0) { // work on delayed hits
+    delayed = true;
     g2i.gg2image(gg_data_delayed);
     std::vector<bool> ll_delayed = g2i.getLeft();
     std::vector<bool> rr_delayed = g2i.getRight();
@@ -255,13 +300,13 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
 	  
 	  // clean up collection
 	  clclean.init(clusters_ll_delayed);
-	  clclean.zSweeper();
+	  //	  clclean.zSweeper();
 	  //      clclean.setPCAAcceptanceThreshold(0.9); // 90% threshold
-	  clclean.runPCAonImage(); // method B for clean up
+	  //	  clclean.runPCAonImage(); // method B for clean up
 	  clusters_ll_delayed = clclean.getClusters(); // overwrite collection
 	  
 	  // store in clustering solution
-	  _translate(the_calibrated_data, clustering_solution, clusters_ll_delayed);
+	  _translate(the_calibrated_data, clustering_solution, clusters_ll_delayed, delayed);
 	}
       }
     }
@@ -286,24 +331,25 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
 
 	  // clean up collection
 	  clclean.init(clusters_rr_delayed);
-	  clclean.zSweeper();
+	  //	  clclean.zSweeper();
 	  //      clclean.setPCAAcceptanceThreshold(0.9); // 90% threshold
-	  clclean.runPCAonImage(); // method B for clean up
+	  //	  clclean.runPCAonImage(); // method B for clean up
 	  clusters_rr_delayed = clclean.getClusters(); // overwrite collection
 
 	  // store in clustering solution
-	  _translate(the_calibrated_data, clustering_solution, clusters_rr_delayed);
+	  _translate(the_calibrated_data, clustering_solution, clusters_rr_delayed, delayed);
 	}
       }
     }
   }
+  eventCounter++;
   return dpp::base_module::PROCESS_SUCCESS;
 }
 
 
 void imagesegmentation_clustering_module::_translate(const snemo::datamodel::calibrated_data& the_calibrated_data,
 						     snemo::datamodel::tracker_clustering_solution & clustering_solution, 
-						     std::unordered_map<unsigned int, std::vector<MetaInfo> >& clusters) 
+						     std::unordered_map<unsigned int, std::vector<MetaInfo> >& clusters, bool delayed) 
 {
   namespace sdm = snemo::datamodel;
   MetaInfo mi;
@@ -311,7 +357,13 @@ void imagesegmentation_clustering_module::_translate(const snemo::datamodel::cal
   for (auto& entry : clusters) { // loop through map
     // Append a new cluster :
     sdm::tracker_cluster::handle_type tch(new sdm::tracker_cluster);
+    if (delayed)
+      tch.grab().make_delayed(); // flag this tracker_cluster object as delayed
+    else
+      tch.grab().make_prompt();
+
     clustering_solution.grab_clusters().push_back(tch);
+
     sdm::tracker_cluster::handle_type & cluster_handle
       = clustering_solution.grab_clusters().back();
     // set cluster id number

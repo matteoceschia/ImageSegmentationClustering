@@ -18,7 +18,7 @@ using namespace Eigen;
 
 // MetaInfo translates uniquely to Geiger Hit
 struct MetaInfo {int side; int row; int column; double z;};
-struct Pixel {int x; int y;}; // x=column, y=row
+typedef std::pair<int, int> Pixel;  // x=column, y=row
 
 
 // genuine image segmentation method
@@ -100,9 +100,10 @@ public:
   
   void addEdge(int v, int w); // function to add an edge to graph
   bool isReachable(int s, int d); // returns true if there is a path from s to d
-  std::vector<std::vector<int>> bfsPaths(int start, int target); // all paths between s and t
+  void bfsPaths(int start, int target); // all paths between s and t
   bool singleNode(int node); // is a single node (one edge only) if true
   std::unordered_set<int> nodes(); // return node container as set
+  std::vector<std::vector<int>> paths() {return allPaths;}  
 };
 
 
@@ -131,6 +132,7 @@ private:
 protected:
   void cluster_withgraph(); // uses store and cls
   void translate(std::list<std::vector<std::vector<int> > > temp);
+  void remove_copies();
   std::vector<int> all_deadends(Graph gg);
   std::vector<int> column_nodes(Graph gg, int col);
   std::vector<std::vector<int> > oneDcluster(std::vector<int> data);
@@ -170,8 +172,6 @@ private:
   GraphClusterer* gr;
   
 protected:
-
-  std::unordered_map<unsigned int, std::list<Pixel> > merge_single_to_multi(std::unordered_map<unsigned int, std::list<Pixel> > ll, std::unordered_map<unsigned int, std::list<Pixel> > rr);
 
 public:
 
@@ -255,7 +255,7 @@ public:
 
   ClusterCleanup() {
     threshold = 0.9; // 90% default pca axis ratio
-    stepwidth = 5.0; // minimum z-step half-width
+    stepwidth = 10.0; // minimum z-step half-width
   } // default constructor
 
   ~ClusterCleanup() {

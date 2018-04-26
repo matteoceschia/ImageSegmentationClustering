@@ -13,13 +13,6 @@
 void ImageSegmentation::cluster(std::vector<bool> data) {
   if (clscollection.size())
     clscollection.clear();
-  std::unordered_map<unsigned int, std::list<Pixel> > partial_left; // for splits
-  std::unordered_map<unsigned int, std::list<Pixel> > partial_right; // cluster format
-
-  std::vector<int> spoints;
-  std::pair<int,int> test1(2,2); // test for presence
-  std::pair<int,int> test2(1,2);
-  std::pair<int,int> test3(2,1);
 
   labels->label(data); // create labels from ImageLabel object
 
@@ -28,72 +21,20 @@ void ImageSegmentation::cluster(std::vector<bool> data) {
 
   // test splitting with an image input
 
-  bool goToGraph = false;
-  for (auto& im : icollection) {
+  for (auto& im : icollection) { // for all images in the collection
     labels->label(im); // splitting overwrites labels
     cls = labels->getLabels(); // book them now for simplest single cluster
 
     if (labels->is_splitting(im)) {
-
       // check first for all complex segmentation
-      spoints = labels->split_at();
-      if (spoints.size()>1) { // needs different clusterer
-	//	std::cout << "split points size " << spoints.size() << std::endl;
-	goToGraph = true; //complex segmentation
-      }
-      bool crossing = false;
-      for (auto& sp : labels->splitpoints()) { // std::pair output
-	//	std::cout << "split points: (" << std::get<0>(sp) << "," << std::get<1>(sp) << ")" << std::endl;
-	if (sp==test1) // needs different clusterer
-	  goToGraph = true; // complex segmentation
-	if ((crossing && sp==test3) || (crossing && sp==test2)) // crossing tracks
-	  goToGraph = true; // complex segmentation
-	if (sp==test2 || sp==test3)
-	  crossing = true; // half the condition at a first pass
-	if (std::get<0>(sp)>2 || std::get<1>(sp)>2) // more than 2 structures found
-	  goToGraph = true; // complex segmentation
-      }
+      std::cout << "use graph." << std::endl;
 
-      std::cout << "done is_splitting with graph flag at " << goToGraph << std::endl;
-      if (goToGraph) { // try clustering elsewhere
-	gr->cluster(im); // fill clusters
-	cls = gr->getClusters();
-      }
-      else { // try clustering here; simple enough structure
-	partial_left = labels->getLeftLabels(); // in cluster map format
-	partial_right = labels->getRightLabels();
-	int cut = labels->split_at()[0];
+      gr->cluster(im); // fill clusters
+      cls = gr->getClusters();
 
-	// correct with offset for right label pixels
-	std::list<Pixel> coll_rr;
-	Pixel newpp;
-	for (auto& rr : partial_right) {
-	  for (Pixel& pp : rr.second) {
-	    newpp.x = pp.x + cut + 1; // offset column
-	    newpp.y = pp.y;
-	    coll_rr.push_back(newpp);
-	  }
-	  rr.second = coll_rr;
-	  coll_rr.clear();
-	}
-
-	std::pair<int, int> signature = labels->splitpoints()[cut];
-	// std::cout << "split signature: (" << std::get<0>(signature) << "," << std::get<1>(signature) << ")" << std::endl;
-	int ll = std::get<0>(signature);
-	int rr = std::get<1>(signature);
-	if (ll<rr) // (1,2) case
-	  cls = merge_single_to_multi(partial_left, partial_right);
-	else       // (2,1) case
-	  cls = merge_single_to_multi(partial_right, partial_left);
-
-      }
     }
-//     else
-//       std::cout << "no splitting" << std::endl;
-
     // simple clusters already in cls
     clscollection.push_back(cls); // basket collection
-    goToGraph = false;
   }
 }
 
@@ -113,22 +54,6 @@ std::unordered_map<unsigned int, std::list<Pixel> > ImageSegmentation::getCluste
 }
 
 
-
-
-std::unordered_map<unsigned int, std::list<Pixel> > ImageSegmentation::merge_single_to_multi(std::unordered_map<unsigned int, std::list<Pixel> > single, std::unordered_map<unsigned int, std::list<Pixel> > multi) {
-  std::unordered_map<unsigned int, std::list<Pixel> > newcls;
-  std::list<Pixel> collection;
-  unsigned int key;
-  for (auto& multimap : multi) {
-    key = multimap.first;
-    collection = multimap.second; // append the singles list to this
-    for (auto& singlemap : single ) // should just be one entry
-      for (Pixel& pp : singlemap.second) // just the list of Pixels
-	collection.push_back(pp); // merging of singles list to multi list
-    newcls[key] = collection;
-  }
-  return newcls;
-}
 
 
 
@@ -159,8 +84,35 @@ void GraphClusterer::cluster(std::vector<bool> data) {
 // 	std::cout << "row: " << nd << std::endl;
 //   }
   cluster_withgraph(); // uses store and outputs in cls data member
+  remove_copies(); // clear out cluster store of identical copies.
 }
 
+
+void GraphClusterer::remove_copies() {
+  std::set<unsigned int> removal_keys; // only unique entries
+  std::list<Pixel> target;
+  for (auto& entry : cls) {
+    unsigned int key1 = entry.first; // compare this
+    for (unsigned int i=key1+1; i<cls.size();i++) { // to the rest in the container
+      target = cls[i];
+      if (std::equal(target.begin(), target.end(), entry.second.begin()))
+	removal_keys.insert(key1); // remove equal copies of clusters, only unique keys here
+    }
+  }
+  std::unordered_map<unsigned int, std::list<Pixel> > newcls;
+  std::set<unsigned int>::iterator findit;
+  unsigned int counter = 1;
+  for (auto& entry : cls) {
+    findit = std::find(removal_keys.begin(), removal_keys.end(), entry.first);
+    if (findit == removal_keys.end()) { // found no key in the removal set
+      newcls[counter] = entry.second; // book this clusters
+      counter++; // new key
+    }
+  }
+  std::cout << "cluster size " << cls.size() << " and after copy removal " << newcls.size() << std::endl;
+  cls.clear(); // replace current cluster container
+  cls = newcls; // store the cleaned copy
+}
 
 
 std::unordered_map<unsigned int, std::list<Pixel> > GraphClusterer::getClusters() {
@@ -176,8 +128,8 @@ void GraphClusterer::cluster_withgraph() {
   Graph gg(entries);
   // fill graph with index integers corresponding to nodes container
   for (std::pair<Pixel, Pixel>& edge : edges) {
-    std::pair<int,int> start_node = std::make_pair(edge.first.x, edge.first.y);
-    std::pair<int,int> end_node = std::make_pair(edge.second.x, edge.second.y);
+    std::pair<int,int> start_node = std::make_pair(edge.first.first, edge.first.second);
+    std::pair<int,int> end_node = std::make_pair(edge.second.first, edge.second.second);
     
     std::vector<std::pair<int,int>>::iterator it1 = std::find(nodes.begin(), nodes.end(), start_node);
     std::vector<std::pair<int,int>>::iterator it2 = std::find(nodes.begin(), nodes.end(), end_node);
@@ -193,6 +145,13 @@ void GraphClusterer::cluster_withgraph() {
   std::vector<int> dead_ends = all_deadends(gg);
   std::vector<int> starts = column_nodes(gg, 0); // column 0 for starts
   std::vector<int> targets = column_nodes(gg, width-1); // column width-1 for targets
+
+  // curving paths to consider
+  if (targets.empty())
+    targets = starts;
+  else if (starts.empty())
+    starts = targets;
+
 //   for (int idx : dead_ends)
 //     std::cout << "dead_end index: " << idx << " ";
 //   std::cout << std::endl;
@@ -203,9 +162,14 @@ void GraphClusterer::cluster_withgraph() {
 //     std::cout << "targets index: " << idx << " ";
 //   std::cout << std::endl;
 
+  // curving paths to consider again
+  starts.insert(starts.end(), targets.begin(), targets.end());
+  targets.insert(targets.end(), starts.begin(), starts.end());
+
   // merge starts and targets with dead ends
   starts.insert(starts.end(), dead_ends.begin(), dead_ends.end());
   targets.insert(targets.end(), dead_ends.begin(), dead_ends.end());
+
 //   for (int idx : starts)
 //     std::cout << "All starts index: " << idx << " ";
 //   std::cout << std::endl;
@@ -221,9 +185,12 @@ void GraphClusterer::cluster_withgraph() {
     nodeS = nodes.at(s);
     for (int t : targets) {
       nodeT = nodes.at(t);
-      if (gg.isReachable(s, t))
-	if (s != t && nodeS.first != nodeT.first) 
-	  tempCluster.push_back(gg.bfsPaths(s, t));
+      if (gg.isReachable(s, t)) {
+	if (s != t) {
+	  gg.bfsPaths(s, t);
+	  tempCluster.push_back(gg.paths());
+	}
+      }
     }
   }
   translate(tempCluster); // fill cls map in suitable format
@@ -251,8 +218,8 @@ void GraphClusterer::translate(std::list<std::vector<std::vector<int> > > temp) 
 	cluster1D = store[node.first]; // unravel the store map, key is column
 	rows = cluster1D.at(node.second); // select collection of rows in column
 	for (int row : rows) {
-	  pp.x = node.first; // column in image
-	  pp.y = row;        // row in image
+	  pp.first = node.first; // column in image
+	  pp.second = row;        // row in image
 	  pixels.push_back(pp); 
 	} // collected all pixels for that node
       } // keep collecting pixels for every node on path
@@ -283,12 +250,12 @@ void GraphClusterer::make_edges() {
     for (auto& nodevector : layer) { // vector<int> from vector<vector<int>>
       for (auto& nextnode : entry) {
 	if (nodes_connected(nodevector, nextnode)) {
-	  start.x = col - 1;
-	  start.y = index;
-	  target.x = col;
-	  target.y = indexNext;
-	  vertices.insert(std::make_pair(start.x, start.y)); // unique nodes only
-	  vertices.insert(std::make_pair(target.x, target.y)); // 
+	  start.first = col - 1;
+	  start.second = index;
+	  target.first = col;
+	  target.second = indexNext;
+	  vertices.insert(std::make_pair(start.first, start.second)); // unique nodes only
+	  vertices.insert(std::make_pair(target.first, target.second)); // 
 	  edges.push_back(std::make_pair(start,target));
 	}
 	indexNext++;
@@ -309,7 +276,7 @@ void GraphClusterer::make_edges() {
 //   for (auto& edge : edges) {
 //     Pixel st = edge.first;
 //     Pixel ta = edge.second;
-//     std::cout << "Edge: " << st.x << ", " << st.y << " ;T= "<< ta.x << ", " << ta.y << std::endl;
+//     std::cout << "Edge: " << st.first << ", " << st.second << " ;T= "<< ta.first << ", " << ta.second << std::endl;
 //   }
 //   std::cout << "Full Node container: " << std::endl;
 //   int counter = 0;
@@ -434,7 +401,7 @@ std::list<std::vector<bool> > ImageLabel::imagecollection() {
   
     std::list<Pixel> pixels = x.second; // extract pixels
     for (auto& pp : pixels) 
-      im[pp.y * width + pp.x] = true;
+      im[pp.second * width + pp.first] = true;
 
     collection.push_back(im);
     im.clear();
@@ -475,6 +442,7 @@ bool ImageLabel::is_splitting(std::vector<bool> data) {
   std::vector<bool> right;
   int nleft, nright;
   int copywidth = width;
+
   // slice image at column
   for (int cut=1; cut<copywidth; cut++) {
     for (int j=0;j<height;j++)
@@ -545,8 +513,8 @@ void ImageLabel::label() {
 	  int c = y*width + x;
 	  while (component[c] != c) c = component[c];
 	  
-	  pp.x = x; // column
-	  pp.y = y; // row
+	  pp.first = x; // column
+	  pp.second = y; // row
 	  componentMap[c].push_back(pp);
         }
     }
@@ -617,7 +585,7 @@ std::unordered_map<unsigned int, std::vector<MetaInfo> > GG2ImageConverter::imag
     for (auto& pp : pixels) { // for every pixel
       // find the geiger hit in data, multiple times if needed
       for (auto& mi : data) {
-	if (pp.x == mi.column && pp.y == mi.row && side == mi.side) { // found it
+	if (pp.first == mi.column && pp.second == mi.row && side == mi.side) { // found it
 	  hit.side = mi.side;
 	  hit.row = mi.row;
 	  hit.column = mi.column;
@@ -740,14 +708,15 @@ bool Graph::isReachable(int s, int d)
 
 
 
-std::vector<std::vector<int>> Graph::bfsPaths(int start, int target)
+void Graph::bfsPaths(int start, int target)
 {
   if (!adj.size()) {
-    return {};
+    return;
   }
   // clear data members
   allPaths.clear();
   currentPath.clear();
+  if (start == target) return; // nothing to do
 
   std::queue<int> queue;
   std::vector<int> distance(adj.size(), MAXINT);
@@ -784,10 +753,10 @@ std::vector<std::vector<int>> Graph::bfsPaths(int start, int target)
   
   if (ans) {
     dfs(prev, target);
-    return allPaths;
+    return;
   }
 
-  return {};
+  return;
 }
 
 
@@ -849,16 +818,16 @@ void ClusterCleanup::zSplit(unsigned int clsid, std::vector<MetaInfo>& cls) {
     allz[i] = mi.z;
     i++;
   }
-  if (i<=6) return; // not enough data points to fill rough histogram
+  if (i<7) return; // not enough data points to fill rough histogram
   double start = allz.min();
   double end   = allz.max();
   //  std::cout << "zSplit, start z " << start << " end " << end << std::endl;
   
   // Case 1: check all z values on global gap  
   double zlimit = histogramSplit(allz, start, end);
-  //  std::cout << "case 1: zlimit = " << zlimit << std::endl;
 
   if (zlimit != DUMMY) {
+    std::cout << "case 1: zlimit = " << zlimit << std::endl;
     zSplitCluster(clsid, zlimit);
     return;
   }
@@ -895,6 +864,11 @@ void ClusterCleanup::zSplitCluster(unsigned int id, double zlimit) {
     //    std::cout << "modcls z = " << cls.at(which).z << std::endl;
   }
 
+  // avoid single pixels to be split off
+  if (keepElement.size() == 1 || newcls.size() == 1) {
+    return; // do nothing
+  }
+
   // modify cluster collection
   clusters[id] = modcls;
   clusters[clusters.size()+1] = newcls; // keys count from 1
@@ -908,7 +882,7 @@ double ClusterCleanup::histogramSplit(std::valarray<double>& allz, double start,
 
   double step = fabs((end - start)/nbins);
   //  std::cout << "histoSplit, step " << step << std::endl;
-  if (fabs((end - start)/stepwidth) <= 1.0) return DUMMY; // z coordinate error size = flat in z, no split
+  if (step / stepwidth / 2.0 <= 2.0) return DUMMY; // z coordinate error size = flat in z, no split
 
   std::vector<int> histogram(nbins+1, 0); // fill with zero
 
@@ -922,16 +896,17 @@ double ClusterCleanup::histogramSplit(std::valarray<double>& allz, double start,
 //     std::cout << "histoSplit, bin " << bin << std::endl;
 
   std::vector<int>::iterator it;
-  it = find(histogram.begin(), histogram.end(), 0);
+  it = std::find(histogram.begin(), histogram.end(), 0);
   if (it != histogram.end()) { // found a zero in the histogram, a gap
     int pos = it - histogram.begin(); // index of first zero in histo
 
     std::reverse(histogram.begin(), histogram.end()); // check for zero from the other end
-    it = find(histogram.begin(), histogram.end(), 0);
+    it = std::find(histogram.begin(), histogram.end(), 0);
     int pos2 = histogram.size() - (it-histogram.begin()); // index of last zero in histo
-
+    
+    if (pos==pos2) return DUMMY; // not just a single zero in the histogram
     double loc = (pos+pos2)/2.0; // average index position
-    //    std::cout << "histoSplit, average split index location " << loc << std::endl;
+    //    std::cout << "histoSplit, split index " << pos << " and " << pos2 << std::endl;
     return loc * step + start; // return z value of average of empty bins as border
   }
   else
@@ -957,7 +932,7 @@ void ClusterCleanup::histogramSweeper(unsigned int clsid) {
   std::vector<MetaInfo> newcls;
 
   double step = fabs((end - start)/nbins);
-  if (fabs((end - start)/stepwidth) <= 1.0) return; // nothing to do
+  if (step / stepwidth / 2.0 <= 2.0) return; // nothing to do
 
   std::vector<int> histogram(nbins+1, 0); // fill with zero
 
@@ -969,14 +944,14 @@ void ClusterCleanup::histogramSweeper(unsigned int clsid) {
   int sum1 = 0;
   int sum2 = 0;
   std::vector<int>::iterator it;
-  it = find(histogram.begin(), histogram.end(), 0);
+  it = std::find(histogram.begin(), histogram.end(), 0);
   if (it != histogram.end()) { // found a zero in the histogram, a gap
     int pos = it - histogram.begin(); // index of first zero in histo
 
     for (int jj=0;jj<pos;jj++) sum1+=histogram[jj];
 
     std::reverse(histogram.begin(), histogram.end()); // check for zero from the other end
-    it = find(histogram.begin(), histogram.end(), 0);
+    it = std::find(histogram.begin(), histogram.end(), 0);
     int pos2 = histogram.size() - (it-histogram.begin()); // index of last zero in histo
 
     for (int jj=0;jj<pos2;jj++) sum2+=histogram[jj]; // histo has been reversed, add from 0
@@ -1010,7 +985,7 @@ void ClusterCleanup::consolidate() {
   std::unordered_map<unsigned int, std::vector<MetaInfo> > newcls; // dummy storage
   unsigned int counter = 1; // cluster keys start from 1
   for (auto& entry : clusters) { // gives uint, vector<MetaInfo>
-    std::vector<unsigned int>::iterator findit = find(accepted.begin(), accepted.end(), entry.first);
+    std::vector<unsigned int>::iterator findit = std::find(accepted.begin(), accepted.end(), entry.first);
     if (findit!=accepted.end()) { // found
       newcls[counter] = entry.second;
       counter++;
@@ -1028,9 +1003,10 @@ void ClusterCleanup::checkAcceptance(const VectorXd& ev, unsigned int id) {
   evnormed << ev[0]/sum, ev[1]/sum; // fill with relative fractions
 
   for (int i=0;i<evnormed.size();i++) {
-    //    std::cout << "Ev normed: " << evnormed[i] << std::endl;
     if (evnormed[i] > threshold) // check for one dominant eigenvalue
       accepted.push_back(id);
+    else if (evnormed[i] < threshold && evnormed[i] > 0.5)
+      std::cout << "Ev normed failed cut: " << evnormed[i] << std::endl;
   }
 }
 
@@ -1078,6 +1054,10 @@ void ClusterCleanup::runPCAonImage() {
   for (auto& entry : clusters) { // gives uint, vector<MetaInfo>
     clsid = entry.first;
     points = (int)entry.second.size();
+    if (points<9) { 
+      accepted.push_back(clsid);
+      continue; // avoid loosing small clusters
+    }
     Data.resize(points, NoChange); // now points x 2 matrix
     for (MetaInfo& mi : entry.second) { // fill 2 columns
       Data(i,0) = mi.column;

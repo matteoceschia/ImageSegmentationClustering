@@ -47,10 +47,11 @@ public:
 protected:
 	void _translate(const snemo::datamodel::calibrated_data&,
 			snemo::datamodel::tracker_clustering_solution &, 
-			std::unordered_map<unsigned int, std::vector<MetaInfo> >&);
+			std::unordered_map<unsigned int, std::vector<MetaInfo> >&, bool delayed);
 
 
 private:
+	int eventCounter;
 	std::string _TCD_label_;
 	ImageSegmentation* iseg;
 	
