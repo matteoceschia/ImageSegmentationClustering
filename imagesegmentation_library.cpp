@@ -26,12 +26,8 @@ void ImageSegmentation::cluster(std::vector<bool> data) {
     cls = labels->getLabels(); // book them now for simplest single cluster
 
     if (labels->is_splitting(im)) {
-      // check first for all complex segmentation
-      std::cout << "use graph." << std::endl;
-
       gr->cluster(im); // fill clusters
       cls = gr->getClusters();
-
     }
     // simple clusters already in cls
     clscollection.push_back(cls); // basket collection
@@ -90,17 +86,39 @@ void GraphClusterer::cluster(std::vector<bool> data) {
 
 void GraphClusterer::remove_copies() {
   std::set<unsigned int> removal_keys; // only unique entries
-  std::list<Pixel> target;
-  for (auto& entry : cls) {
+  std::set<unsigned int> visited; // only unique entries
+  std::vector<Pixel> starter; // temp storage: copies of the std::list
+  std::vector<Pixel> target; // in order to be able to sort the container
+  std::set<unsigned int>::iterator findit;
+  for (auto& entry : cls) { // not in order, so book visited keys
     unsigned int key1 = entry.first; // compare this
-    for (unsigned int i=key1+1; i<cls.size();i++) { // to the rest in the container
-      target = cls[i];
-      if (std::equal(target.begin(), target.end(), entry.second.begin()))
-	removal_keys.insert(key1); // remove equal copies of clusters, only unique keys here
+    visited.insert(key1);
+    for (auto& val : entry.second) starter.push_back(val);
+    std::sort(starter.begin(), starter.end());
+    //    std::cout << " visited key " << key1 << " " << std::endl;
+    //    std::cout << "\nstarter from " << key1 <<std::endl;
+    //    for (auto& pp : starter) std::cout << "x=" << pp.first << " y=" << pp.second << " ";
+    //    std::cout << std::endl;
+
+    for (auto& comparator : cls) { // to the rest in the container
+      findit = std::find(visited.begin(), visited.end(), comparator.first);
+
+      if (findit == visited.end()) { // not yet compared to as entry
+	//	std::cout << " against keys " << comparator.first << " ";
+	for (auto& val : comparator.second) target.push_back(val);
+	std::sort(target.begin(), target.end());
+
+	// avoid subset equality in equal comparison
+	if (std::equal(target.begin(), target.end(), starter.begin()) && std::equal(starter.begin(), starter.end(), target.begin())) {
+	  removal_keys.insert(comparator.first); // remove equal copies of clusters, only unique keys here
+	  //	  std::cout << " booked " << comparator.first << "==" << key1 << " ";
+	}
+      }
+      target.clear();
     }
+    starter.clear();
   }
   std::unordered_map<unsigned int, std::list<Pixel> > newcls;
-  std::set<unsigned int>::iterator findit;
   unsigned int counter = 1;
   for (auto& entry : cls) {
     findit = std::find(removal_keys.begin(), removal_keys.end(), entry.first);
