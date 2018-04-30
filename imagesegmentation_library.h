@@ -11,8 +11,8 @@
 #include <utility>
 
 // Eigen3
-#include <Eigen/Dense>
-using namespace Eigen;
+// #include <Eigen/Dense>
+// using namespace Eigen;
 
 #define DUMMY 11111
 
@@ -228,53 +228,44 @@ public:
 };
 
 
-//**********************
-// modify cluster map by
-// (a) remove projection effects in z - split clusters that only appear as one
-// (b) remove clusters that are too non-straight with pca in 2d
-//**********************
-class ClusterCleanup {
+//****************************
+// preliminary clustering in z
+// split up structures in z 
+// - cleans up confusion in imaging
+//****************************
+class ZClusterer {
 
 private:
-  double threshold; // PCA ratio threshold
   double stepwidth; // half resolution in z
-  std::vector<unsigned int> accepted; // accepted cluster id's
   std::unordered_map<unsigned int, std::vector<MetaInfo> > clusters;
+  std::unordered_map<unsigned int, std::vector<MetaInfo> > clustercopy; // for modifications
 
 
 protected:
-  VectorXd pca2d(const Matrix<double, Dynamic, 2>& data, int points);
-  void checkAcceptance(const VectorXd& ev, unsigned int id);
   void zSplit(unsigned int clsid, std::vector<MetaInfo>& cls);
   double histogramSplit(std::valarray<double>& zdata, double start, double end);
   void zSplitCluster(unsigned int id, double zlimit);
-  void consolidate(); // use accepted ids to modify cluster map
-  void histogramSweeper(unsigned int clsid);
+  double splitFinder(std::vector<int>& hist);
 
 public:
 
-  ClusterCleanup() {
-    threshold = 0.9; // 90% default pca axis ratio
+  ZClusterer() {
     stepwidth = 10.0; // minimum z-step half-width
   } // default constructor
 
-  ~ClusterCleanup() {
-    accepted.clear();
+  ~ZClusterer() {
     clusters.clear();
   }
 
   // init and setting functions
-  void init(std::unordered_map<unsigned int, std::vector<MetaInfo> > cls); // full info clusters
-  void setPCAAcceptanceThreshold(double thresh) {threshold = thresh;}
+  void init(std::unordered_map<unsigned int, std::vector<MetaInfo> >& cls); // full info clusters
   void setZResolution(double res) {stepwidth = res*0.5;} // half resolution in z
 
   // action functions
   void zSplitter(); // remove projection effects for clusters from image
-  void zSweeper(); // cleanup double booked pixels with wrong z
-  void runPCAonImage(); // 2D PCA on image data
 
   // output, cleaned cluster collection
-  std::unordered_map<unsigned int, std::vector<MetaInfo> > getClusters() {return clusters;}
+  std::unordered_map<unsigned int, std::vector<MetaInfo> > getClusters() {return clustercopy;}
 
 };
 

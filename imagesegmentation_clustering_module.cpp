@@ -146,8 +146,10 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
 //   std::cout << "In process: gg_data_delayed size=" << gg_data_delayed.size() << std::endl;
 
   GG2ImageConverter g2i(18,113); // full sized tracker, 113 rows at 9 columns for 2 sides
-  ClusterCleanup clclean; // final step splitting in z and cleaning collection
+  ZClusterer clclean; // final step splitting in z and cleaning collection
 
+  // Prompt hits, Left Tracker
+  //**************************
   if (gg_data.size()>0) { // work on prompt hits
 //     for (MetaInfo& entry : gg_data)
 //       std::cout << "Cluster Entry: (" << entry.side << ", " << entry.column << ", " << entry.row << ")" << std::endl;
@@ -162,22 +164,11 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
     ilab.label(rr); // right side
     std::unordered_map<unsigned int, std::list<Pixel> > labels_right = ilab.getLabels();
 
-    // print left
-//     std::cout << "First labels left" << std::endl;
-//     std::list<Pixel> plist;
-//       std::vector<MetaInfo> milist;
-//     for (std::unordered_map<unsigned int, std::list<Pixel> >::iterator it=labels_left.begin(); it!=labels_left.end(); ++it) {
-//       std::cout << it->first << " => " << '\n';
-//       plist = it->second;
-//       for (Pixel& pp: plist)
-// 	std::cout << pp.y << " " << pp.x << std::endl;
-//     }
-
     // back to meta info
     if (labels_left.size()>0) {
       std::unordered_map<unsigned int, std::vector<MetaInfo> > label_cls_left = g2i.image2gg(gg_data, labels_left, 0);
       clclean.init(label_cls_left);
-      //      clclean.setZResolution(10.0); // [mm] z resolution
+      clclean.setZResolution(20.0); // [mm] z resolution
       clclean.zSplitter(); // method A for clean up
       label_cls_left = clclean.getClusters(); // overwrite collection
 
@@ -202,27 +193,15 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
 	if (cls_left.size()>0) {
 	  // get clusters for left tracker (side=0)
 	  std::unordered_map<unsigned int, std::vector<MetaInfo> > clusters_ll = g2i.image2gg(gg_data, cls_left, 0);
-	  
-	  // clean up collection
-	  clclean.init(clusters_ll);
-	  //	  clclean.zSweeper();
-	  //	  clclean.setPCAAcceptanceThreshold(0.90); // 90% threshold
-	  //	  clclean.runPCAonImage(); // method B for clean up
-	  clusters_ll = clclean.getClusters(); // overwrite collection
 
 	  // store in clustering solution
 	  _translate(the_calibrated_data, clustering_solution, clusters_ll, delayed);
 	}
       }
     }
-    // print left
-//     std::cout << "Labels right" << std::endl;
-//     for (std::unordered_map<unsigned int, std::list<Pixel> >::iterator it=labels_left.begin(); it!=labels_left.end(); ++it) {
-//       std::cout << it->first << " => " << '\n';
-//       plist = it->second;
-//       for (Pixel& pp: plist)
-// 	std::cout << pp.y << " " << pp.x << std::endl;
-//     }
+
+    // Prompt hits, Right Tracker
+    //***************************
     if (labels_right.size()>0) {
       std::unordered_map<unsigned int, std::vector<MetaInfo> > label_cls_right = g2i.image2gg(gg_data, labels_right, 1);
       clclean.init(label_cls_right);
@@ -252,19 +231,15 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
 	  // get clusters
 	  std::unordered_map<unsigned int, std::vector<MetaInfo> > clusters_rr = g2i.image2gg(gg_data, cls_right, 1);
 
-	  // clean up collection
-	  clclean.init(clusters_rr);
-	  //	  clclean.zSweeper();
-	  //      clclean.setPCAAcceptanceThreshold(0.9); // 90% threshold
-	  //	  clclean.runPCAonImage(); // method B for clean up
-	  clusters_rr = clclean.getClusters(); // overwrite collection
-
 	  // store in clustering solution
 	  _translate(the_calibrated_data, clustering_solution, clusters_rr, delayed);
 	}
       }
     }    
   }
+
+  // Delayed hits, Left Tracker
+  //***************************
   if (gg_data_delayed.size()>0) { // work on delayed hits
     delayed = true;
     g2i.gg2image(gg_data_delayed);
@@ -282,7 +257,6 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
     if (labels_left_d.size()>0) {
       std::unordered_map<unsigned int, std::vector<MetaInfo> > label_cls_left_d = g2i.image2gg(gg_data_delayed, labels_left_d, 0);
       clclean.init(label_cls_left_d);
-      //      clclean.setZResolution(10.0); // [mm] z resolution
       clclean.zSplitter(); // method A for clean up
       label_cls_left_d = clclean.getClusters(); // overwrite collection
 
@@ -298,22 +272,17 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
 	  // get clusters
 	  std::unordered_map<unsigned int, std::vector<MetaInfo> > clusters_ll_delayed = g2i.image2gg(gg_data_delayed, cls_left_delayed, 0);
 	  
-	  // clean up collection
-	  clclean.init(clusters_ll_delayed);
-	  //	  clclean.zSweeper();
-	  //      clclean.setPCAAcceptanceThreshold(0.9); // 90% threshold
-	  //	  clclean.runPCAonImage(); // method B for clean up
-	  clusters_ll_delayed = clclean.getClusters(); // overwrite collection
-	  
 	  // store in clustering solution
 	  _translate(the_calibrated_data, clustering_solution, clusters_ll_delayed, delayed);
 	}
       }
     }
+
+    // Delayed hits, Right Tracker
+    //***************************
     if (labels_right_d.size()>0) {
       std::unordered_map<unsigned int, std::vector<MetaInfo> > label_cls_right_d = g2i.image2gg(gg_data_delayed, labels_right_d, 1);
       clclean.init(label_cls_right_d);
-      //      clclean.setZResolution(10.0); // [mm] z resolution
       clclean.zSplitter(); // method A for clean up
       label_cls_right_d = clclean.getClusters(); // overwrite collection
 
@@ -328,13 +297,6 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
 	if (cls_right_delayed.size()>0) {
 	  // get clusters
 	  std::unordered_map<unsigned int, std::vector<MetaInfo> > clusters_rr_delayed = g2i.image2gg(gg_data_delayed, cls_right_delayed, 1);
-
-	  // clean up collection
-	  clclean.init(clusters_rr_delayed);
-	  //	  clclean.zSweeper();
-	  //      clclean.setPCAAcceptanceThreshold(0.9); // 90% threshold
-	  //	  clclean.runPCAonImage(); // method B for clean up
-	  clusters_rr_delayed = clclean.getClusters(); // overwrite collection
 
 	  // store in clustering solution
 	  _translate(the_calibrated_data, clustering_solution, clusters_rr_delayed, delayed);

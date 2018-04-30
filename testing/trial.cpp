@@ -129,6 +129,6 @@ TEST_CASE( "members in second cluster", "[falaise][label][labels]" ) {
 }
 
 TEST_CASE( "N clusters", "[falaise][iseglib][cluster]" ) {
-  REQUIRE( check_iseg_clusters() == 3 );
+  REQUIRE( check_iseg_clusters() == 4 );
 }
 
