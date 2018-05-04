@@ -7,12 +7,14 @@
 #include <set>
 #include <unordered_set>
 #include <vector>
+#include <valarray>
 #include <utility>
 
+#define DUMMY 11111
 
 // MetaInfo translates uniquely to Geiger Hit
-struct MetaInfo {int side; int row; int column;};
-struct Pixel {int x; int y;}; // x=column, y=row
+struct MetaInfo {int side; int row; int column; double z;};
+typedef std::pair<int, int> Pixel;  // x=column, y=row
 
 
 // genuine image segmentation method
@@ -94,9 +96,10 @@ public:
   
   void addEdge(int v, int w); // function to add an edge to graph
   bool isReachable(int s, int d); // returns true if there is a path from s to d
-  std::vector<std::vector<int>> bfsPaths(int start, int target); // all paths between s and t
+  void bfsPaths(int start, int target); // all paths between s and t
   bool singleNode(int node); // is a single node (one edge only) if true
   std::unordered_set<int> nodes(); // return node container as set
+  std::vector<std::vector<int>> paths() {return allPaths;}  
 };
 
 
@@ -125,6 +128,7 @@ private:
 protected:
   void cluster_withgraph(); // uses store and cls
   void translate(std::list<std::vector<std::vector<int> > > temp);
+  void remove_copies();
   std::vector<int> all_deadends(Graph gg);
   std::vector<int> column_nodes(Graph gg, int col);
   std::vector<std::vector<int> > oneDcluster(std::vector<int> data);
@@ -164,8 +168,6 @@ private:
   GraphClusterer* gr;
   
 protected:
-
-  std::unordered_map<unsigned int, std::list<Pixel> > merge_single_to_multi(std::unordered_map<unsigned int, std::list<Pixel> > ll, std::unordered_map<unsigned int, std::list<Pixel> > rr);
 
 public:
 
@@ -218,6 +220,49 @@ public:
 
   // clusters must come from imagelabel object
   std::unordered_map<unsigned int, std::vector<MetaInfo> > image2gg(std::vector<MetaInfo> data, std::unordered_map<unsigned int, std::list<Pixel> > labels, int side);
+
+};
+
+
+//****************************
+// preliminary clustering in z
+// split up structures in z 
+// - cleans up confusion in imaging
+//****************************
+class ZClusterer {
+
+private:
+  double stepwidth; // half resolution in z
+  std::unordered_map<unsigned int, std::vector<MetaInfo> > clusters;
+  std::unordered_map<unsigned int, std::vector<MetaInfo> > clustercopy; // for modifications
+
+
+protected:
+  void zSplit(unsigned int clsid, std::vector<MetaInfo>& cls);
+  double histogramSplit(std::valarray<double>& zdata, double start, double end);
+  double slopeSplit(std::vector<std::pair<int, double> >& allxz);
+  void zSplitCluster(unsigned int id, double zlimit);
+  double splitFinder(std::vector<int>& hist);
+
+public:
+
+  ZClusterer() {
+    stepwidth = 10.0; // minimum z-step half-width
+  } // default constructor
+
+  ~ZClusterer() {
+    clusters.clear();
+  }
+
+  // init and setting functions
+  void init(std::unordered_map<unsigned int, std::vector<MetaInfo> >& cls); // full info clusters
+  void setZResolution(double res) {stepwidth = res*0.5;} // half resolution in z
+
+  // action functions
+  void zSplitter(); // remove projection effects for clusters from image
+
+  // output, cleaned cluster collection
+  std::unordered_map<unsigned int, std::vector<MetaInfo> > getClusters() {return clustercopy;}
 
 };
 

@@ -2,7 +2,7 @@
 
 
 Yorck Ramachers (Warwick)
-Last updated April 4, 2018
+Last updated May 4, 2018
 
 The ImageSegmentation module is a reconstruction module. It attempts to
 cluster tracker hits and fill the TCD data bank in Falaise in the current
@@ -210,6 +210,12 @@ Finishing off, all nodes in each shortest path cluster are transformed back
 into collections of tracker pixels and numbered as clusters in a map
 container, ready to be turned back into geiger hit collections by the utility
 function image2gg. 
+
+## ZClusterer
+A preliminary algorithm to utilize the z coordinate information in aid of 
+imagesegmentation. Should be simple to be robust. Current version isn't 
+sufficient to finish off the previous clustering but will serve usefully in
+future version as pre-filter.
 
 ## Utilities
 

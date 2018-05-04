@@ -166,7 +166,7 @@ TEST_CASE( "Graph Data in", "[falaise][iseglib][grdata_in]" ) {
 }
 
 TEST_CASE( "Graph N clustersA", "[falaise][graphcluster][nclustersA]" ) {
-  REQUIRE( check_cls_nA() == 4 );
+  REQUIRE( check_cls_nA() == 6 );
 }
 
 TEST_CASE( "Graph N clustersB", "[falaise][graphcluster][nclustersB]" ) {
@@ -182,11 +182,11 @@ TEST_CASE( "Graph Node content", "[falaise][graphcluster][nodescontent]" ) {
 }
 
 TEST_CASE( "Graph cluster contentA", "[falaise][graphcluster][clustercontentA]" ) {
-  REQUIRE( check_cluster_contentA() == 10 );
+  REQUIRE( check_cluster_contentA() == 9 );
 }
 
 TEST_CASE( "Graph cluster contentB", "[falaise][graphcluster][clustercontentB]" ) {
-  REQUIRE( check_cluster_contentB() == 8 );
+  REQUIRE( check_cluster_contentB() == 7 );
 }
 
 TEST_CASE( "ISegmentation N clustersB", "[falaise][label][nclustersB]" ) {
