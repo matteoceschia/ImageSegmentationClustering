@@ -244,6 +244,7 @@ private:
 protected:
   void zSplit(unsigned int clsid, std::vector<MetaInfo>& cls);
   double histogramSplit(std::valarray<double>& zdata, double start, double end);
+  double slopeSplit(std::vector<std::pair<int, double> >& allxz);
   void zSplitCluster(unsigned int id, double zlimit);
   double splitFinder(std::vector<int>& hist);
 

@@ -197,12 +197,8 @@ void GraphClusterer::cluster_withgraph() {
 
   // find paths from starts to targets to form clusters  
   std::list<std::vector<std::vector<int> > > tempCluster;
-  std::pair<int, int> nodeS;
-  std::pair<int, int> nodeT;
   for (int s : starts) {
-    nodeS = nodes.at(s);
     for (int t : targets) {
-      nodeT = nodes.at(t);
       if (gg.isReachable(s, t)) {
 	if (s != t) {
 	  gg.bfsPaths(s, t);
@@ -821,6 +817,7 @@ void ZClusterer::zSplitter() {
 
 
 void ZClusterer::zSplit(unsigned int clsid, std::vector<MetaInfo>& cls) {
+  //************************
   // find discontinuity in z
   std::valarray<double> allz(cls.size()); // for finding extremes
   int i=0;
@@ -841,6 +838,27 @@ void ZClusterer::zSplit(unsigned int clsid, std::vector<MetaInfo>& cls) {
     zSplitCluster(clsid, zlimit);
     return;
   }
+
+  //********************************
+  // find discontinuity in x-z slope
+  std::vector<std::pair<int, double> > allxz(cls.size()); // permits sorting for x in pair
+  std::pair<int, double> xz;
+  for (auto& mi : cls) {
+    xz.first  = mi.column;
+    xz.second = mi.z;
+    allxz.push_back(xz); // fill
+  }
+  std::sort(allxz.begin(),allxz.end()); // in order; maybe not necessary
+  
+  // Case 2: check all x-z slopes on differences
+  zlimit = slopeSplit(allxz);
+
+  if (zlimit != DUMMY) {
+    std::cout << "case 2: zlimit = " << zlimit << std::endl;
+    zSplitCluster(clsid, zlimit);
+    return;
+  }
+
 }
 
 
@@ -889,28 +907,12 @@ void ZClusterer::zSplitCluster(unsigned int id, double zlimit) {
 double ZClusterer::histogramSplit(std::valarray<double>& allz, double start, double end) {
   // discretize z-axis
   int nbins = 4; // coarse histogram resolution in z, avoid gaps
-  int diffbins = 5; // difference histogram
-  //  int diffbins = (int)allz.size(); // difference histogram
-  std::vector<double> sortedz(allz.size()); // needs sorted z values, not possible with valarray
 
   double step = fabs((end - start)/nbins);
-  std::cout << "histoSplit, step " << step << std::endl;
+  //  std::cout << "histoSplit, step " << step << std::endl;
   if (fabs((end - start)) / stepwidth <= 3.0) return DUMMY; // z coordinate error size = flat in z, no split
 
   std::vector<int> histogram(nbins+1, 0); // fill with zero
-  std::vector<int> diffhistogram(diffbins+1, 0); // fill with zero
-
-  for (unsigned int i=0;i<allz.size();i++) sortedz[i]=allz[i]; // copy
-  std::sort(sortedz.begin(),sortedz.end()); // in order
-
-  // set up difference histogram
-  double maxslope=0.0;
-  for (int j=1;j<(int)sortedz.size();j++) { // for all z
-    double slope = sortedz[j]-sortedz[j-1];
-    if (fabs(slope) > maxslope) maxslope = slope;
-  }
-  double diffstep = fabs(maxslope)/diffbins; // biggest difference binning
-  std::cout << "diffhisto, step " << diffstep << std::endl;
 
   // fill histogram
   for (int j=0;j<(int)allz.size();j++) { // for all z
@@ -918,46 +920,67 @@ double ZClusterer::histogramSplit(std::valarray<double>& allz, double start, dou
     histogram[bucket] += 1; // increment
   }
 
-  // fill slope histogram
-  for (int j=1;j<(int)sortedz.size();j++) { // for all z
-    int bucket = (int)floor((sortedz[j]-sortedz[j-1]) / diffstep); // which bin
-    diffhistogram[bucket] += 1; // increment
-  }
-
   // check
-  for (int bin : histogram)
-    std::cout << "histoSplit, bin " << bin << std::endl;
-  for (int bin : diffhistogram)
-    std::cout << "difference histo, bin " << bin << std::endl;
+//   for (int bin : histogram)
+//     std::cout << "histoSplit, bin " << bin << std::endl;
   
   double zlimit = splitFinder(histogram); // find detectable absolute gap in z
   if (zlimit != DUMMY) {
-    std::cout << "split from histogam." << std::endl;
+//     std::cout << "split from histogam." << std::endl;
     return zlimit * step + start;
   }
-  else {
+  return DUMMY; // no gap found
+}
+
+
+
+double ZClusterer::slopeSplit(std::vector<std::pair<int, double> >& allxz) {
+  int diffbins = 5; // difference histogram
+  std::vector<int> diffhistogram(diffbins+1, 0); // fill with zero
+  std::vector<double> zonly(allxz.size()); // needs sorted z values, not possible with valarray
+
+  for (unsigned int i=0;i<allxz.size();i++) zonly[i]=allxz[i].second; // copy
+
+  // set up difference histogram
+  double maxslope=0.0;
+  for (int j=1;j<(int)zonly.size();j++) { // for all z
+    double slope = zonly[j] - zonly[j-1];
+    if (fabs(slope) > maxslope) maxslope = slope;
+  }
+  double diffstep = fabs(maxslope)/diffbins; // biggest difference binning
+  //  std::cout << "diffhisto, step " << diffstep << std::endl;
+
+  // fill slope histogram
+  for (int j=1;j<(int)zonly.size();j++) { // for all z
+    int bucket = (int)floor((zonly[j] - zonly[j-1]) / diffstep); // which bin
+    diffhistogram[bucket] += 1; // increment
+  }
+
+//   for (int bin : diffhistogram)
+//     std::cout << "difference histo, bin " << bin << std::endl;
+
     if (fabs(maxslope) / stepwidth <= 3.0) return DUMMY; // z coordinate error size = flat in z, no split
-    zlimit = splitFinder(diffhistogram); // otherwise look for gap in differences
+    double zlimit = splitFinder(diffhistogram); // otherwise look for gap in differences
     if (zlimit != DUMMY) {
       double slopelimit = zlimit * diffstep;
       int nn = 1;
-      double zdiff = sortedz[nn] - sortedz[nn-1];
-      while (nn<sortedz.size() && zdiff<slopelimit) {
+      double zdiff = zonly[nn] - zonly[nn-1];
+      while (nn<zonly.size() && zdiff<slopelimit) {
 	nn++;
-	zdiff = sortedz[nn] - sortedz[nn-1];
+	zdiff = zonly[nn] - zonly[nn-1];
       }
-      std::cout << "split from slopes." << std::endl;
-      return (sortedz[nn]+sortedz[nn-1])*0.5; // half-way z between big slope change
+//       std::cout << "split from slopes." << std::endl;
+      return (zonly[nn]+zonly[nn-1])*0.5; // half-way z between big slope change
     }
-  }      
-  return DUMMY; // no gap found
+
+  return DUMMY;
 }
 
 
 
 double ZClusterer::splitFinder(std::vector<int>& hist) {
   int counter=0;
-  while (hist[counter]==0) // find first non-zero entry
+  while (hist[counter]==0 && counter<hist.size()) // find first non-zero entry
     counter++;
   if (counter==hist.size()) return DUMMY; // nothing to do
 
