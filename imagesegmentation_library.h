@@ -15,6 +15,7 @@
 // MetaInfo translates uniquely to Geiger Hit
 struct MetaInfo {int side; int row; int column; double z;};
 typedef std::pair<int, int> Pixel;  // x=column, y=row
+typedef std::pair<Pixel, double> GGHit;  // x=column, y=row, double z
 
 
 // genuine image segmentation method
@@ -104,90 +105,51 @@ public:
 
 
 
-// Used for the more complex clustering challenges
-class GraphClusterer {
+// main cluster algorithm in this object
+class GraphClusterer3D {
 
 private:
 
-  GraphClusterer(){width=0; height=0;}
+  std::unordered_map<unsigned int, std::vector<MetaInfo> > clusters;
+  std::unordered_map<unsigned int, std::vector<MetaInfo> > clustercopy;
+
+  int side;
   int width;
   int height;
-  std::unordered_map<unsigned int, std::list<Pixel> > cls;
-  
-  // index store of nodes with column map index where nodes hold pixel indices
-  std::unordered_map<int, std::vector<std::vector<int> > > store;
-
-  std::set<std::pair<int, int> > vertices; // unique nodes set
-  std::vector<std::pair<int, int> > nodes; // countable container for indexing
-  std::vector<std::pair<Pixel, Pixel> > edges; // node connections
+  std::set<GGHit> vertices; // unique nodes set
+  std::vector<GGHit> nodes; // countable container for indexing
+  std::set<std::pair<GGHit, GGHit> > edges; // node connections
+  std::unordered_map<int, std::vector<std::vector<int> > > store; // node indices with col key
 
   // functions
-  void make_edges();
-  bool nodes_connected(std::vector<int> va, std::vector<int> vb);
-
+  void make_edges(double maxdiff);
+  bool is_neighbour(GGHit start, GGHit target, double maxdiff);
+  
 protected:
-  void cluster_withgraph(); // uses store and cls
-  void translate(std::list<std::vector<std::vector<int> > > temp);
+  std::unordered_map<unsigned int, std::vector<MetaInfo> > cluster_withgraph(double maxdiff); // uses store and cls
   void remove_copies();
+  std::unordered_map<unsigned int, std::vector<MetaInfo> > translate(std::list<std::vector<std::vector<int> > >& temp);
   std::vector<int> all_deadends(Graph gg);
   std::vector<int> column_nodes(Graph gg, int col);
-  std::vector<std::vector<int> > oneDcluster(std::vector<int> data);
-
+  std::vector<std::vector<int> > cluster1D(std::vector<int>& idx, double maxdiff);
+  void preventLumped(std::set<int>& indices);
 
 public:
 
-  GraphClusterer(int w, int h) {
+  GraphClusterer3D(int w, int h) {
+    side = 0;
     width=w; 
     height=h;
   }
-  ~GraphClusterer() {
-    cls.clear();
-    store.clear();
+  ~GraphClusterer3D() {
+    clusters.clear();
     nodes.clear();
     vertices.clear();
     edges.clear();
   }
 
-  void cluster(std::vector<bool> data); // input for GraphClusterer
-  std::unordered_map<unsigned int, std::list<Pixel> > getClusters();
-  std::vector<std::pair<int, int> > getNodes() {return nodes;}
-};
-
-
-// Used for simple clustering 
-class ImageSegmentation {
-
-private:
-
-  ImageSegmentation(){width=0; height=0;}
-  int width;
-  int height;
-  std::unordered_map<unsigned int, std::list<Pixel> > cls;
-  std::vector<std::unordered_map<unsigned int, std::list<Pixel> > > clscollection;
-  ImageLabel* labels;
-  GraphClusterer* gr;
-  
-protected:
-
-public:
-
-  ImageSegmentation(int w, int h) {
-    width=w; 
-    height=h;
-    labels = new ImageLabel(width, height); // have labeling ready
-    gr = new GraphClusterer(width, height); // have complex clustering ready
-  }
-  ~ImageSegmentation() {
-    clscollection.clear();
-    cls.clear();
-    if (labels)
-      delete labels;
-    if (gr)
-      delete gr;
-  }
-
-  void cluster(std::vector<bool> data); // input for ImageLabel
-  std::unordered_map<unsigned int, std::list<Pixel> > getClusters(); // ready for image2gg
+  void cluster(std::unordered_map<unsigned int, std::vector<MetaInfo> >& cls);
+  std::unordered_map<unsigned int, std::vector<MetaInfo> > getClusters() {return clusters;}
 };
 
 
@@ -240,7 +202,6 @@ private:
 protected:
   void zSplit(unsigned int clsid, std::vector<MetaInfo>& cls);
   double histogramSplit(std::valarray<double>& zdata, double start, double end);
-  double slopeSplit(std::vector<std::pair<int, double> >& allxz);
   void zSplitCluster(unsigned int id, double zlimit);
   double splitFinder(std::vector<int>& hist);
 
