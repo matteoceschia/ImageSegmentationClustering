@@ -10,10 +10,6 @@
 #include <valarray>
 #include <utility>
 
-// Eigen3
-// #include <Eigen/Dense>
-// using namespace Eigen;
-
 #define DUMMY 11111
 
 // MetaInfo translates uniquely to Geiger Hit
