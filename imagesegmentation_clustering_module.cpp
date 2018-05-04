@@ -143,11 +143,14 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
 
   // Library objects for clustering
   GG2ImageConverter g2i(18,113); // full sized tracker, 113 rows at 9 columns for 2 sides
+
   // filter method (A)
   ImageLabel ilab(9,113); // for prompt hits
   ImageLabel ilab_d(9,113); // for delayed hits
+
   // filter method (B)
   ZClusterer clclean; // splitting in z
+
   // clusterer
   GraphClusterer3D gcl(9,113);
 
