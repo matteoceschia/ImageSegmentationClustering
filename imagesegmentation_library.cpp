@@ -43,7 +43,7 @@ void GraphClusterer3D::cluster(std::unordered_map<unsigned int, std::vector<Meta
   std::vector<MetaInfo> newhits; // contains replacement hits
   
   for (auto& entry : clusters) {
-    std::cout << "cluster nr. " << entry.first << std::endl;
+    //    std::cout << "cluster nr. " << entry.first << std::endl;
     std::vector<MetaInfo> cluster = entry.second;
     side = cluster.at(0).side; // same for all metainfos in cluster
     for (auto& mi: cluster) {
@@ -59,7 +59,7 @@ void GraphClusterer3D::cluster(std::unordered_map<unsigned int, std::vector<Meta
     // turn vertices to countable nodes container
     int nn=0;
     for (auto& nd : vertices) {
-      std::cout << "GGHit Node " << nn << ": "<< nd.first.first << " " << nd.first.second << ", " << nd.second << std::endl;
+      //      std::cout << "GGHit Node " << nn << ": "<< nd.first.first << " " << nd.first.second << ", " << nd.second << std::endl;
       nodes.push_back(nd);
       nn++;
     }    
@@ -178,12 +178,12 @@ std::vector<std::vector<int> > GraphClusterer3D::cluster1D(std::vector<int>& nod
   }
   lumped.push_back(nd); // save the final node collection
 
-  for (int nn=0;nn<lumped.size();nn++) {
-    std::cout << "lumped nodes nr. " << nn << std::endl;
-    for (int id : lumped[nn])
-      std::cout << "id=" << id << " ";
-    std::cout << std::endl;
-  }
+//   for (int nn=0;nn<lumped.size();nn++) {
+//     std::cout << "lumped nodes nr. " << nn << std::endl;
+//     for (int id : lumped[nn])
+//       std::cout << "id=" << id << " ";
+//     std::cout << std::endl;
+//   }
 
   return lumped;
 }
@@ -206,7 +206,7 @@ std::unordered_map<unsigned int, std::vector<MetaInfo> > GraphClusterer3D::clust
     
     int start_pos = it1 - nodes.begin(); // index of start node in node container
     int end_pos = it2 - nodes.begin(); // index of end node in node container
-    std::cout << "Edge index of node start: " << start_pos << " index end:" << end_pos << std::endl;
+    //    std::cout << "Edge index of node start: " << start_pos << " index end:" << end_pos << std::endl;
     gg.addEdge(start_pos, end_pos);
   } // graph filled and operative
   
@@ -214,15 +214,15 @@ std::unordered_map<unsigned int, std::vector<MetaInfo> > GraphClusterer3D::clust
   std::vector<int> dead_ends = all_deadends(gg);
   std::vector<int> starts = column_nodes(gg, 0); // column 0 for starts
   std::vector<int> targets = column_nodes(gg, width-1); // column width-1 for targets
-   for (int idx : dead_ends)
-     std::cout << "dead_end index: " << idx << " ";
-   std::cout << std::endl;
-  for (int idx : starts)
-    std::cout << "starts index: " << idx << " ";
-  std::cout << std::endl;
-  for (int idx : targets)
-    std::cout << "targets index: " << idx << " ";
-  std::cout << std::endl;
+//   for (int idx : dead_ends)
+//      std::cout << "dead_end index: " << idx << " ";
+//    std::cout << std::endl;
+//   for (int idx : starts)
+//     std::cout << "starts index: " << idx << " ";
+//   std::cout << std::endl;
+//   for (int idx : targets)
+//     std::cout << "targets index: " << idx << " ";
+//   std::cout << std::endl;
 
   // curving paths to consider
   if (targets.empty())
@@ -249,14 +249,14 @@ std::unordered_map<unsigned int, std::vector<MetaInfo> > GraphClusterer3D::clust
   preventLumped(pathstarts);
   preventLumped(pathtargets);
 
-  std::cout << "All starts index: ";
-  for (int idx : pathstarts)
-    std::cout << idx << " ";
-  std::cout << std::endl;
-  std::cout << "All targets index: ";
-  for (int idx : pathtargets)
-    std::cout << idx << " ";
-  std::cout << std::endl;
+//   std::cout << "All starts index: ";
+//   for (int idx : pathstarts)
+//     std::cout << idx << " ";
+//   std::cout << std::endl;
+//   std::cout << "All targets index: ";
+//   for (int idx : pathtargets)
+//     std::cout << idx << " ";
+//   std::cout << std::endl;
 
   // find paths from starts to targets to form clusters  
   std::list<std::vector<std::vector<int> > > tempCluster;
@@ -483,7 +483,7 @@ void GraphClusterer3D::remove_copies() {
       counter++; // new key
     }
   }
-  std::cout << "cluster size " << clusters.size() << " and after copy removal " << newcls.size() << std::endl;
+  //  std::cout << "cluster size " << clusters.size() << " and after copy removal " << newcls.size() << std::endl;
   clusters.clear(); // replace current cluster container
   clusters = newcls; // store the cleaned copy
 }
