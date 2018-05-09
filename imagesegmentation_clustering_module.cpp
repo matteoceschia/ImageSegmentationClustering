@@ -41,7 +41,7 @@ void imagesegmentation_clustering_module::reset()
   
   // clean up
   _TCD_label_.clear();
-  }
+
   eventCounter = 0;
   std::cout << "Image segmentation clustering finished." << std::endl;
   return;

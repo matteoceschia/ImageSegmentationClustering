@@ -92,18 +92,6 @@ unsigned int check_label_labels(){
 }
 
 
-unsigned int check_iseg_clusters(){
-  std::vector<bool> im = image();
-  int w = 5;
-  int h = 6;
-  ImageSegmentation iseg(w,h);
-  iseg.cluster(im);
-  std::unordered_map<unsigned int, std::list<Pixel> > cls = iseg.getClusters();
-  unsigned int value = cls.size();
-  return value;
-}
-
-
 TEST_CASE( "Data in", "[falaise][iseglib][data_in]" ) {
   REQUIRE( check_image() == 30 );
 }
@@ -126,9 +114,5 @@ TEST_CASE( "N splits", "[falaise][label][nsplits]" ) {
 
 TEST_CASE( "members in second cluster", "[falaise][label][labels]" ) {
   REQUIRE( check_label_labels() == 10 );
-}
-
-TEST_CASE( "N clusters", "[falaise][iseglib][cluster]" ) {
-  REQUIRE( check_iseg_clusters() == 4 );
 }
 

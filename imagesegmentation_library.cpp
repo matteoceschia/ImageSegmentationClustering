@@ -163,7 +163,7 @@ std::vector<std::vector<int> > GraphClusterer3D::cluster1D(std::vector<int>& nod
   int row = nodes[nodeindex[0]].first.second; // row of first lumped node
   double z= nodes[nodeindex[0]].second; // z of first lumped node
   for (int& idx : nodeindex) {
-    if ((nodes[idx].first.second - row) < 2 && (nodes[idx].second - z) < maxdiff+0.1) { // nearest neighbour
+    if (fabs(nodes[idx].first.second - row) < 2 && fabs(nodes[idx].second - z) < maxdiff+0.1) { // nearest neighbour
       nd.push_back(idx); // first entry is trivially in
       row = nodes[idx].first.second; // set to new comparison
       z   = nodes[idx].second;
