@@ -138,8 +138,8 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
     else
       gg_data_delayed.push_back(mi);
   }
-//   std::cout << "In process: gg_data size=" << gg_data.size() << std::endl;
-//   std::cout << "In process: gg_data_delayed size=" << gg_data_delayed.size() << std::endl;
+  std::cout << "In process: gg_data size=" << gg_data.size() << std::endl;
+  std::cout << "In process: gg_data_delayed size=" << gg_data_delayed.size() << std::endl;
 
   // Library objects for clustering
   GG2ImageConverter g2i(18,113); // full sized tracker, 113 rows at 9 columns for 2 sides
@@ -168,6 +168,8 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
     std::unordered_map<unsigned int, std::list<Pixel> > labels_left = ilab.getLabels();
     ilab.label(rr); // right side
     std::unordered_map<unsigned int, std::list<Pixel> > labels_right = ilab.getLabels();
+    std::cout << "In process: label left cluster size=" << labels_left.size() << std::endl;
+    std::cout << "In process: label right cluster size=" << labels_right.size() << std::endl;
 
     // back to meta info
     if (labels_left.size()>0) {
@@ -177,10 +179,12 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
       clclean.setZResolution(20.0); // [mm] z resolution
       clclean.zSplitter(); // find z split
       label_cls_left = clclean.getClusters(); // overwrite collection
+      std::cout << "In process: after clclean, left size=" << label_cls_left.size() << std::endl;
 
       // for each pre clustered
       gcl.cluster(label_cls_left);
       std::unordered_map<unsigned int, std::vector<MetaInfo> > clusters_ll = gcl.getClusters();
+      std::cout << "In process: after graph3D, left size=" << clusters_ll.size() << std::endl;
       if (clusters_ll.size()>0) {
 	// store in clustering solution
 	_translate(the_calibrated_data, clustering_solution, clusters_ll, delayed);
@@ -194,9 +198,11 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
       clclean.init(label_cls_right);
       clclean.zSplitter(); // find z split
       label_cls_right = clclean.getClusters(); // overwrite collection
+      std::cout << "In process: after clclean, right size=" << label_cls_right.size() << std::endl;
 
       gcl.cluster(label_cls_right);
       std::unordered_map<unsigned int, std::vector<MetaInfo> > clusters_rr = gcl.getClusters();
+      std::cout << "In process: after graph3D, right size=" << clusters_rr.size() << std::endl;
       if (clusters_rr.size()>0) {
 	// store in clustering solution
 	_translate(the_calibrated_data, clustering_solution, clusters_rr, delayed);

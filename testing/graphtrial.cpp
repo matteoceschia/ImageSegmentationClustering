@@ -46,7 +46,7 @@ int pattern1()
 
   gcl.cluster(clscollection);
   std::unordered_map<unsigned int, std::vector<MetaInfo> > cls = gcl.getClusters();
-  return extract(cls); // should be 14
+  return extract(cls); // should be 11
 }
 
 
@@ -110,7 +110,7 @@ int extract(std::unordered_map<unsigned int, std::vector<MetaInfo> >& cls) {
 
 
 TEST_CASE( "Cluster A", "[falaise][graphtest][nclustersA]" ) {
-  REQUIRE( pattern1() == 14 );
+  REQUIRE( pattern1() == 11 );
 }
 
 TEST_CASE( "Cluster B", "[falaise][graphtest][nclustersB]" ) {

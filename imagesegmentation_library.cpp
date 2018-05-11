@@ -43,9 +43,21 @@ void GraphClusterer3D::cluster(std::unordered_map<unsigned int, std::vector<Meta
   std::vector<MetaInfo> newhits; // contains replacement hits
   
   for (auto& entry : clusters) {
-    //    std::cout << "cluster nr. " << entry.first << std::endl;
+    std::cout << "cluster nr. " << entry.first << std::endl;
+    nodes.clear();
+    vertices.clear();
+    edges.clear();
+    zonly.clear();
+    store.clear();
+
     std::vector<MetaInfo> cluster = entry.second;
     side = cluster.at(0).side; // same for all metainfos in cluster
+
+    if (cluster.size()<3) {
+      clustercopy[entry.first] = cluster; // rescue
+      continue; // next in loop; leave as is
+    }
+
     for (auto& mi: cluster) {
       // fill unique vertices set
       pp.first   = mi.column; // stays integer x=column
@@ -59,20 +71,20 @@ void GraphClusterer3D::cluster(std::unordered_map<unsigned int, std::vector<Meta
     // turn vertices to countable nodes container
     int nn=0;
     for (auto& nd : vertices) {
-      //      std::cout << "GGHit Node " << nn << ": "<< nd.first.first << " " << nd.first.second << ", " << nd.second << std::endl;
+      std::cout << "GGHit Node " << nn << ": "<< nd.first.first << " " << nd.first.second << ", " << nd.second << std::endl;
       nodes.push_back(nd);
       nn++;
     }    
     
     //***
     // set up z-difference search
-    std::sort(zonly.begin(),zonly.end()); // in order
+    //    std::sort(zonly.begin(),zonly.end()); // in order
     double maxdifference=0.0;
     for (int j=1;j<(int)zonly.size();j++) { // for all z
       double slope = zonly[j] - zonly[j-1];
-      if (fabs(slope) > maxdifference) maxdifference = slope;
+      if (fabs(slope) > maxdifference) maxdifference = fabs(slope);
     }
-    //    std::cout << "max z difference: " << maxdifference << std::endl;
+    std::cout << "max z difference: " << maxdifference << std::endl;
 
     //***
     // lump nodes in 1D
@@ -89,6 +101,11 @@ void GraphClusterer3D::cluster(std::unordered_map<unsigned int, std::vector<Meta
     //***
     // make more clusters from input clusters
     // edges require neighbour search with limited z distance
+    if (store.size()<2) {  // just one lumped node - no graph possible
+      clustercopy[entry.first] = cluster; // rescue
+      continue;  // next in loop; leave as is
+    }
+
     std::unordered_map<unsigned int, std::vector<MetaInfo> > newcls = cluster_withgraph(maxdifference);
 
   //***
@@ -135,11 +152,6 @@ void GraphClusterer3D::cluster(std::unordered_map<unsigned int, std::vector<Meta
     for (int i=1; i<=newcls.size(); i++) // work with copy while reading from clusters
       clustercopy[clustercopy.size() + i] = newcls[i];
 
-    nodes.clear();
-    vertices.clear();
-    edges.clear();
-    zonly.clear();
-    store.clear();
   } 
 
   //***
@@ -178,12 +190,12 @@ std::vector<std::vector<int> > GraphClusterer3D::cluster1D(std::vector<int>& nod
   }
   lumped.push_back(nd); // save the final node collection
 
-//   for (int nn=0;nn<lumped.size();nn++) {
-//     std::cout << "lumped nodes nr. " << nn << std::endl;
-//     for (int id : lumped[nn])
-//       std::cout << "id=" << id << " ";
-//     std::cout << std::endl;
-//   }
+  for (int nn=0;nn<lumped.size();nn++) {
+    std::cout << "lumped nodes nr. " << nn << std::endl;
+    for (int id : lumped[nn])
+      std::cout << "id=" << id << " ";
+    std::cout << std::endl;
+  }
 
   return lumped;
 }
@@ -206,7 +218,7 @@ std::unordered_map<unsigned int, std::vector<MetaInfo> > GraphClusterer3D::clust
     
     int start_pos = it1 - nodes.begin(); // index of start node in node container
     int end_pos = it2 - nodes.begin(); // index of end node in node container
-    //    std::cout << "Edge index of node start: " << start_pos << " index end:" << end_pos << std::endl;
+    //    std::cout << "fill graph: Edge index of node start: " << start_pos << " index end:" << end_pos << std::endl;
     gg.addEdge(start_pos, end_pos);
   } // graph filled and operative
   
@@ -225,12 +237,28 @@ std::unordered_map<unsigned int, std::vector<MetaInfo> > GraphClusterer3D::clust
 //   std::cout << std::endl;
 
   // curving paths to consider
-  if (targets.empty())
-    targets = starts;
-  else if (starts.empty())
-    starts = targets;
+  if (targets.empty()) {
+    int whichcol = width-2;
+    std::vector<int> nextcolumn = column_nodes(gg, whichcol); // column width-2 for targets
+    while (nextcolumn.empty() && whichcol > 0) {
+      whichcol--;
+      nextcolumn = column_nodes(gg, whichcol); // column whichcol for targets
+    }
+    if (!nextcolumn.empty())
+      targets = nextcolumn;
+  }
+  else if (starts.empty()) {
+    int whichcol = 1;
+    std::vector<int> nextcolumn = column_nodes(gg, whichcol); // column 1 for starts
+    while (nextcolumn.empty() && whichcol < width-1) {
+      whichcol++;
+      nextcolumn = column_nodes(gg, whichcol); // column whichcol for starts
+    }
+    if (!nextcolumn.empty())
+      starts = nextcolumn;
+  }
 
-  // curving paths to consider again
+  // curving paths to consider again; complete bending inside tracker
   starts.insert(starts.end(), targets.begin(), targets.end());
   targets.insert(targets.end(), starts.begin(), starts.end());
 
@@ -249,14 +277,14 @@ std::unordered_map<unsigned int, std::vector<MetaInfo> > GraphClusterer3D::clust
   preventLumped(pathstarts);
   preventLumped(pathtargets);
 
-//   std::cout << "All starts index: ";
-//   for (int idx : pathstarts)
-//     std::cout << idx << " ";
-//   std::cout << std::endl;
-//   std::cout << "All targets index: ";
-//   for (int idx : pathtargets)
-//     std::cout << idx << " ";
-//   std::cout << std::endl;
+  std::cout << "All starts index: ";
+  for (int idx : pathstarts)
+    std::cout << idx << " ";
+  std::cout << std::endl;
+  std::cout << "All targets index: ";
+  for (int idx : pathtargets)
+    std::cout << idx << " ";
+  std::cout << std::endl;
 
   // find paths from starts to targets to form clusters  
   std::list<std::vector<std::vector<int> > > tempCluster;
@@ -333,6 +361,7 @@ std::unordered_map<unsigned int, std::vector<MetaInfo> > GraphClusterer3D::trans
 void GraphClusterer3D::make_edges(double maxdiff) {
   // fill tree with doubles by construction
   int nentries = (int)nodes.size();
+  int nneighbours = (nentries>=8) ? 8 : nentries;
   double* x = new double [nentries]; // kdTree needs arrays as input
   double* y = new double [nentries]; // kdTree needs arrays as input
   double* z = new double [nentries]; // kdTree needs arrays as input
@@ -360,16 +389,16 @@ void GraphClusterer3D::make_edges(double maxdiff) {
 
   edges.clear();
   double point[3]; // needed for kdTree requests
-  double dist[8]; // check on nearest 8 neighbours in grid
-  int indx[8];    // where 8 is the maximum posible in a square grid
+  double* dist = new double [nneighbours]; // check on nearest 8 neighbours in grid
+  int* indx = new int [nneighbours];       // where 8 is the maximum posible in a square grid
 
   for (counter=0; counter<nentries; counter++) {
     start = nodes.at(counter);
     point[0] = x[counter];
     point[1] = y[counter];
     point[2] = z[counter];
-    hittree->FindNearestNeighbors(point,8,indx,dist); // index needs to correspond to node index
-    for (int j=0;j<8;j++) {
+    hittree->FindNearestNeighbors(point,nneighbours,indx,dist); // index needs to correspond to node index
+    for (int j=0;j<nneighbours;j++) {
       target = nodes.at(indx[j]);
       if (is_neighbour(start, target, maxdiff)) 
 	edges.insert(std::make_pair(start, target)); // only unique edges in set
@@ -377,6 +406,8 @@ void GraphClusterer3D::make_edges(double maxdiff) {
 
   }
 
+  delete [] indx;
+  delete [] dist;
   delete [] x;
   delete [] y;
   delete [] z;
@@ -483,7 +514,7 @@ void GraphClusterer3D::remove_copies() {
       counter++; // new key
     }
   }
-  //  std::cout << "cluster size " << clusters.size() << " and after copy removal " << newcls.size() << std::endl;
+  std::cout << "cluster size " << clusters.size() << " and after copy removal " << newcls.size() << std::endl;
   clusters.clear(); // replace current cluster container
   clusters = newcls; // store the cleaned copy
 }
