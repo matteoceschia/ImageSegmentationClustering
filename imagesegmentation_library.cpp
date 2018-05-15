@@ -17,6 +17,8 @@
 void GraphClusterer3D::cluster(std::unordered_map<unsigned int, std::vector<MetaInfo> >& cls) {
   //***
   // init
+  if (finalcls.size())
+    finalcls.clear();
   if (clusters.size())
     clusters.clear();
   clusters = cls; // copy to work with
@@ -1109,7 +1111,7 @@ void ZClusterer::zSplitCluster(unsigned int id, double zlimit) {
 
 double ZClusterer::histogramSplit(std::valarray<double>& allz, double start, double end) {
   // discretize z-axis
-  int nbins = 4; // coarse histogram resolution in z, avoid gaps
+  int nbins = 5; // coarse histogram resolution in z, avoid gaps
 
   double step = fabs((end - start)/nbins);
   //  std::cout << "histoSplit, step " << step << std::endl;
