@@ -20,11 +20,11 @@ void GraphClusterer3D::cluster(std::unordered_map<unsigned int, std::vector<Meta
   if (clusters.size())
     clusters.clear();
   clusters = cls; // copy to work with
-  clustercopy.clear();
   nodes.clear();
   vertices.clear();
   edges.clear();
   store.clear();
+  std::unordered_map<unsigned int, std::vector<MetaInfo> > clustercopy;
 
   Pixel pp;
   GGHit hit;
@@ -42,19 +42,22 @@ void GraphClusterer3D::cluster(std::unordered_map<unsigned int, std::vector<Meta
   MetaInfo newmi; // replacement meta info for original
   std::vector<MetaInfo> newhits; // contains replacement hits
   
+  unsigned int counter = 0; // loop counter
+  std::unordered_map<unsigned int, std::vector<MetaInfo> > newcls;
   for (auto& entry : clusters) {
     std::cout << "cluster nr. " << entry.first << std::endl;
     nodes.clear();
-    vertices.clear();
     edges.clear();
     zonly.clear();
     store.clear();
+    vertices.clear();
+    counter++;
 
     std::vector<MetaInfo> cluster = entry.second;
     side = cluster.at(0).side; // same for all metainfos in cluster
 
     if (cluster.size()<3) {
-      clustercopy[entry.first] = cluster; // rescue
+      clustercopy[counter] = cluster; // rescue
       continue; // next in loop; leave as is
     }
 
@@ -78,7 +81,6 @@ void GraphClusterer3D::cluster(std::unordered_map<unsigned int, std::vector<Meta
     
     //***
     // set up z-difference search
-    //    std::sort(zonly.begin(),zonly.end()); // in order
     double maxdifference=0.0;
     for (int j=1;j<(int)zonly.size();j++) { // for all z
       double slope = zonly[j] - zonly[j-1];
@@ -94,24 +96,27 @@ void GraphClusterer3D::cluster(std::unordered_map<unsigned int, std::vector<Meta
 	if (nodes[j].first.first == i) // gets GGHit.first=>Pixel.first->column
 	  ggindex.push_back(j); // all GGHit in column i
       lumpedNodes = cluster1D(ggindex, maxdifference);
-      store[i] = lumpedNodes;
+      if (lumpedNodes.size())
+	store[i] = lumpedNodes;
       ggindex.clear();
     }
 
     //***
     // make more clusters from input clusters
     // edges require neighbour search with limited z distance
+    //    std::cout << "store size: " << store.size() << std::endl;
     if (store.size()<2) {  // just one lumped node - no graph possible
-      clustercopy[entry.first] = cluster; // rescue
+      clustercopy[counter] = cluster; // rescue
       continue;  // next in loop; leave as is
     }
 
-    std::unordered_map<unsigned int, std::vector<MetaInfo> > newcls = cluster_withgraph(maxdifference);
+    newcls = cluster_withgraph(maxdifference);
 
-  //***
-  // replace all nodes in clusters with lumped nodes
-  // since they  belong together - will create plenty of identical clusters
-  // uses vertices set again to have only unique nodes after replacement
+    vertices.clear();
+    //***
+    // replace all nodes in clusters with lumped nodes
+    // since they  belong together - will create plenty of identical clusters
+    // uses vertices set again to have only unique nodes after replacement
     for (auto& cl : newcls) {
       unsigned int clsid = cl.first;
       std::vector<MetaInfo> hits = cl.second;
@@ -147,20 +152,24 @@ void GraphClusterer3D::cluster(std::unordered_map<unsigned int, std::vector<Meta
       newhits.clear();
     }
 
-    //***
-    // append to existing clusters, counting from 1
-    for (int i=1; i<=newcls.size(); i++) // work with copy while reading from clusters
-      clustercopy[clustercopy.size() + i] = newcls[i];
-
+    int j=1;
+    for (auto& cl : newcls) {
+      std::vector<MetaInfo> hits = cl.second;
+      clustercopy[clustercopy.size() + j] = hits;
+      j++;
+    }
   } 
 
   //***
   // finish analysing clusters
   clusters.clear();
+  counter = 1;
   for (auto& cl : clustercopy) {
-    unsigned int clsid = cl.first;
     std::vector<MetaInfo> hits = cl.second;
-    clusters[clsid] = hits;
+//     for (auto& hit : hits)
+//       std::cout << "in clustercopy - nr " << counter << " " << hit.column << " " << hit.row << " " << hit.z << std::endl;
+    clusters[counter] = hits;
+    counter++;
   }
   
   remove_copies(); // clear out clusters store of identical copies.
@@ -247,7 +256,7 @@ std::unordered_map<unsigned int, std::vector<MetaInfo> > GraphClusterer3D::clust
     if (!nextcolumn.empty())
       targets = nextcolumn;
   }
-  else if (starts.empty()) {
+  if (starts.empty()) {
     int whichcol = 1;
     std::vector<int> nextcolumn = column_nodes(gg, whichcol); // column 1 for starts
     while (nextcolumn.empty() && whichcol < width-1) {
@@ -257,6 +266,12 @@ std::unordered_map<unsigned int, std::vector<MetaInfo> > GraphClusterer3D::clust
     if (!nextcolumn.empty())
       starts = nextcolumn;
   }
+//   for (int idx : starts)
+//     std::cout << "starts index: " << idx << " ";
+//   std::cout << std::endl;
+//   for (int idx : targets)
+//     std::cout << "targets index: " << idx << " ";
+//   std::cout << std::endl;
 
   // curving paths to consider again; complete bending inside tracker
   starts.insert(starts.end(), targets.begin(), targets.end());
@@ -340,12 +355,14 @@ std::unordered_map<unsigned int, std::vector<MetaInfo> > GraphClusterer3D::trans
 
   for (auto& entry : temp) { // vector<vector<int>>
     for (auto& path : entry ) { // vector<int>
+      //      std::cout << "in translate - key = " << counter << std::endl;
       for (int index : path) {
 	node = nodes.at(index); // got the node in a path
 	mi.column = node.first.first;  // column in image
 	mi.row    = node.first.second; // row in image
 	mi.z      = node.second;
 	mi.side   = side;
+	//	std::cout << "in translate - " << mi.column << " " << mi.row << " " << mi.z << std::endl;
 	hits.push_back(mi); 
       } // keep collecting meta infors for every node on path
       newcls[counter] = hits; // got all hits, store as cluster
@@ -442,6 +459,10 @@ std::vector<int> GraphClusterer3D::all_deadends(Graph gg) {
 	ends.push_back(index);
   }
 
+  std::vector<int> xwallspecial = check_xwall(gg);
+  if (xwallspecial.size()) // combine with ends
+    ends.insert(ends.end(), xwallspecial.begin(), xwallspecial.end());
+
   return ends;
 }
 
@@ -454,6 +475,78 @@ std::vector<int> GraphClusterer3D::column_nodes(Graph gg, int col) {
     node = nodes.at(index); // translate back to node from container
     if (node.first.first == col)
       found.push_back(index);
+  }
+
+  return found;
+}
+
+
+std::vector<int> GraphClusterer3D::check_xwall(Graph gg) {
+  std::vector<int> found;
+  std::vector<int> found_top;
+  std::vector<int> found_bot;
+  GGHit node;
+  for (int index : gg.nodes()) {
+    node = nodes.at(index); // translate back to node from container
+    if (node.first.second == 0) // book extreme top row for x-wall
+      found_top.push_back(index);
+    if (node.first.second == height-1) // book extreme bottom row for x-wall
+      found_bot.push_back(index);
+  }
+
+  // for top xwall row 
+  int previous;
+  std::vector<std::vector<int> > rowcls;
+  std::vector<int> nn;
+  if (found_top.size()>=2) { // any consecutive neighbours in that row?
+    node = nodes.at(found_top[0]);
+    previous = node.first.first; // previous column
+    for (int idx : found_top) {
+      node = nodes.at(idx);
+      if (fabs(node.first.first - previous)<2) { // neighbours
+	nn.push_back(idx); // minimum one entry always
+	previous = node.first.first;
+      }
+      else {               // not a neighbour anymore
+	rowcls.push_back(nn); // new row block
+	nn.clear();
+      }
+    }
+    rowcls.push_back(nn); // final row block
+  }
+  // clear out all non-double consecutive row hits
+  for (auto& entry : rowcls) {
+    if (entry.size()== 2) {
+      found.push_back(entry[0]);
+      found.push_back(entry[1]);
+    }
+  }
+
+  // for bottom xwall row 
+  nn.clear();
+  rowcls.clear();
+  if (found_bot.size()>=2) { // any consecutive neighbours in that row?
+    node = nodes.at(found_bot[0]);
+    previous = node.first.first; // previous column
+    for (int idx : found_bot) {
+      node = nodes.at(idx);
+      if (fabs(node.first.first - previous)<2) { // neighbours
+	nn.push_back(idx); // minimum one entry always
+	previous = node.first.first;
+      }
+      else {               // not a neighbour anymore
+	rowcls.push_back(nn); // new row block
+	nn.clear();
+      }
+    }
+    rowcls.push_back(nn); // final row block
+  }
+  // clear out all non-double consecutive row hits
+  for (auto& entry : rowcls) {
+    if (entry.size()== 2) {
+      found.push_back(entry[0]);
+      found.push_back(entry[1]);
+    }
   }
 
   return found;
@@ -477,12 +570,12 @@ void GraphClusterer3D::remove_copies() {
       starter.push_back(hit);
     }
     std::sort(starter.begin(), starter.end());
-
-    //    std::cout << " visited key " << key1 << " " << std::endl;
-    //    std::cout << "\nstarter from " << key1 <<std::endl;
-    //    for (auto& pp : starter) std::cout << "x=" << pp.first << " y=" << pp.second << " ";
-    //    std::cout << std::endl;
-
+    
+//     std::cout << " visited key " << key1 << " " << std::endl;
+//     std::cout << "\nstarter from " << key1 <<std::endl;
+//     for (auto& pp : starter) std::cout << "x=" << pp.first << " y=" << pp.second << " ";
+//     std::cout << std::endl;
+    
     for (auto& comparator : clusters) { // to the rest in the container
       findit = std::find(visited.begin(), visited.end(), comparator.first);
 
@@ -510,13 +603,17 @@ void GraphClusterer3D::remove_copies() {
   for (auto& entry : clusters) {
     findit = std::find(removal_keys.begin(), removal_keys.end(), entry.first);
     if (findit == removal_keys.end()) { // found no key in the removal set
+      //      std::cout << " not found " << entry.first << " in removal keys" << std::endl;
       newcls[counter] = entry.second; // book this clusters
       counter++; // new key
     }
   }
   std::cout << "cluster size " << clusters.size() << " and after copy removal " << newcls.size() << std::endl;
-  clusters.clear(); // replace current cluster container
-  clusters = newcls; // store the cleaned copy
+  for (auto& entry : newcls)  {
+//     for (auto& hit : entry.second)
+//       std::cout << "in remove copies - nr " << entry.first << " " << hit.column << " " << hit.row << " " << hit.z << std::endl;
+    finalcls[entry.first] = entry.second; // store the cleaned copy
+  }
 }
 
 

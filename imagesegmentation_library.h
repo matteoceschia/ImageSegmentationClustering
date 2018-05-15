@@ -109,9 +109,8 @@ public:
 class GraphClusterer3D {
 
 private:
-
   std::unordered_map<unsigned int, std::vector<MetaInfo> > clusters;
-  std::unordered_map<unsigned int, std::vector<MetaInfo> > clustercopy;
+  std::unordered_map<unsigned int, std::vector<MetaInfo> > finalcls;
 
   int side;
   int width;
@@ -133,6 +132,7 @@ protected:
   std::vector<int> column_nodes(Graph gg, int col);
   std::vector<std::vector<int> > cluster1D(std::vector<int>& idx, double maxdiff);
   void preventLumped(std::set<int>& indices);
+  std::vector<int> check_xwall(Graph gg);
 
 public:
 
@@ -142,6 +142,7 @@ public:
     height=h;
   }
   ~GraphClusterer3D() {
+    finalcls.clear();
     clusters.clear();
     nodes.clear();
     vertices.clear();
@@ -149,7 +150,7 @@ public:
   }
 
   void cluster(std::unordered_map<unsigned int, std::vector<MetaInfo> >& cls);
-  std::unordered_map<unsigned int, std::vector<MetaInfo> > getClusters() {return clusters;}
+  std::unordered_map<unsigned int, std::vector<MetaInfo> > getClusters() {return finalcls;}
 };
 
 
