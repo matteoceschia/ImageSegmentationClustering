@@ -15,13 +15,13 @@ int check_z_separation()
   //side, row, column, z = metainfo
   // z separate tracks
   int extract(std::unordered_map<unsigned int, std::vector<MetaInfo> >& cls);
-  double inputcls[14][4]       = {{1,0,4, 17.0},
-			          {1,1,2, 16.0},
-			          {1,1,3, 15.0},
-			          {1,1,4, 14.0},
-			          {1,2,0, 13.0},
-			          {1,2,1, 12.0},
-			          {1,2,2, 11.0},
+  double inputcls[14][4]       = {{1,0,4, 27.0},
+			          {1,1,2, 26.0},
+			          {1,1,3, 25.0},
+			          {1,1,4, 24.0},
+			          {1,2,0, 23.0},
+			          {1,2,1, 22.0},
+			          {1,2,2, 21.0},
 			          {1,3,0,-10.0}, // jump in z
 			          {1,3,1,-11.0},
 			          {1,3,2,-12.0},
@@ -44,7 +44,7 @@ int check_z_separation()
 
   ZClusterer clclean;
   clclean.init(clscollection); // data stored and all prepared
-  clclean.setZResolution(10.0);
+  clclean.setZResolution(6.0);
   clclean.zSplitter(); // method A for clean up
   std::unordered_map<unsigned int, std::vector<MetaInfo> > clsPartA =  clclean.getClusters();
   return extract(clsPartA); // should be 7 entries
