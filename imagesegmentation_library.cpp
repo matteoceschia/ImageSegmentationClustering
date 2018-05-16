@@ -186,7 +186,7 @@ std::vector<std::vector<int> > GraphClusterer3D::cluster1D(std::vector<int>& nod
   int row = nodes[nodeindex[0]].first.second; // row of first lumped node
   double z= nodes[nodeindex[0]].second; // z of first lumped node
   for (int& idx : nodeindex) {
-    if (fabs(nodes[idx].first.second - row) < 2 && fabs(nodes[idx].second - z) < 3*maxdiff+0.1) { // nearest neighbour
+    if (fabs(nodes[idx].first.second - row) < 2 && fabs(nodes[idx].second - z) < maxdiff+0.1) { // nearest neighbour
       nd.push_back(idx); // first entry is trivially in
       row = nodes[idx].first.second; // set to new comparison
       z   = nodes[idx].second;
@@ -445,7 +445,7 @@ bool GraphClusterer3D::is_neighbour(GGHit start, GGHit target, double maxdiff) {
 
   // check grid x-y
   if (fabs(ppstart.first-pptarget.first) < 2 && fabs(ppstart.second-pptarget.second) < 2) // one grid place only
-    if (fabs(zstart-ztarget) < 3.0*maxdiff+0.1)    // closer than max z difference
+    if (fabs(zstart-ztarget) < maxdiff+0.1)    // closer than max z difference
       return true;
   return false;
 }
@@ -1111,12 +1111,10 @@ void ZClusterer::zSplitCluster(unsigned int id, double zlimit) {
 
 double ZClusterer::histogramSplit(std::valarray<double>& allz, double start, double end) {
   // discretize z-axis
-  double step = 6*stepwidth;
-  int nbins = floor(fabs(end - start) / step); // coarse histogram resolution in z, avoid gaps
-  std::cout << "histoSplit, nbins " << nbins << std::endl;
-
-  //  if (fabs((end - start)) / stepwidth <= 8.0) return DUMMY; // z coordinate error size = flat in z, no split
-  if (nbins <= 3) return DUMMY; // z coordinate error size = flat in z, no split
+  int nbins = 6; // coarse histogram resolution in z, avoid gaps
+  double step = floor(fabs(end - start) / nbins);
+  
+  if (fabs((end - start)) / stepwidth <= 8.0) return DUMMY; // z coordinate error size = flat in z, no split
 
   std::vector<int> histogram(nbins+1, 0); // fill with zero
 
@@ -1132,7 +1130,6 @@ double ZClusterer::histogramSplit(std::valarray<double>& allz, double start, dou
   
   double zlimit = splitFinder(histogram); // find detectable absolute gap in z
   if (zlimit != DUMMY) {
-//     std::cout << "split from histogam." << std::endl;
     return zlimit * step + start;
   }
   return DUMMY; // no gap found
