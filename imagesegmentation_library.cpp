@@ -109,6 +109,7 @@ void GraphClusterer3D::cluster(std::unordered_map<unsigned int, std::vector<Meta
     //    std::cout << "store size: " << store.size() << std::endl;
     if (store.size()<2) {  // just one lumped node - no graph possible
       clustercopy[counter] = cluster; // rescue
+      std::cout << "store single lumped node." << std::endl;
       continue;  // next in loop; leave as is
     }
 
@@ -162,14 +163,43 @@ void GraphClusterer3D::cluster(std::unordered_map<unsigned int, std::vector<Meta
     }
   } 
 
+  // sweeep leftovers
+  bool leftover = true;
+  std::vector<MetaInfo> unclustered;
+  std::vector<MetaInfo>::iterator hititerator;
+  for (auto& nd : nodes) {
+    for (auto& cl : clustercopy) {
+      std::vector<MetaInfo> hits = cl.second;
+      for (auto& minfo : hits) {
+	if (nd.first.first  == minfo.column &&
+	    nd.first.second == minfo.row &&
+	    nd.second       == minfo.z) {
+	  leftover = false;
+	  continue;
+	}
+      }
+    }
+    if (leftover) {
+      newmi.side = side;
+      newmi.column = nd.first.first;
+      newmi.row    = nd.first.second;
+      newmi.z      = nd.second;
+      unclustered.push_back(newmi);
+      std::cout << "found leftover" << " " << newmi.column << " " << newmi.row << " " << newmi.z << std::endl;
+    }
+    leftover = true;
+  }
+  if (unclustered.size())
+    clustercopy[clustercopy.size() + 1] = unclustered;
+  
   //***
   // finish analysing clusters
   clusters.clear();
   counter = 1;
   for (auto& cl : clustercopy) {
     std::vector<MetaInfo> hits = cl.second;
-//     for (auto& hit : hits)
-//       std::cout << "in clustercopy - nr " << counter << " " << hit.column << " " << hit.row << " " << hit.z << std::endl;
+//     for (auto& minfo : hits)
+//       std::cout << "in clustercopy - nr " << counter << " " << minfo.column << " " << minfo.row << " " << minfo.z << std::endl;
     clusters[counter] = hits;
     counter++;
   }
@@ -237,15 +267,15 @@ std::unordered_map<unsigned int, std::vector<MetaInfo> > GraphClusterer3D::clust
   std::vector<int> dead_ends = all_deadends(gg);
   std::vector<int> starts = column_nodes(gg, 0); // column 0 for starts
   std::vector<int> targets = column_nodes(gg, width-1); // column width-1 for targets
-//   for (int idx : dead_ends)
-//      std::cout << "dead_end index: " << idx << " ";
-//    std::cout << std::endl;
-//   for (int idx : starts)
-//     std::cout << "starts index: " << idx << " ";
-//   std::cout << std::endl;
-//   for (int idx : targets)
-//     std::cout << "targets index: " << idx << " ";
-//   std::cout << std::endl;
+  for (int idx : dead_ends)
+     std::cout << "dead_end index: " << idx << " ";
+   std::cout << std::endl;
+  for (int idx : starts)
+    std::cout << "starts index: " << idx << " ";
+  std::cout << std::endl;
+  for (int idx : targets)
+    std::cout << "targets index: " << idx << " ";
+  std::cout << std::endl;
 
   // curving paths to consider
   if (targets.empty()) {
@@ -445,7 +475,7 @@ bool GraphClusterer3D::is_neighbour(GGHit start, GGHit target, double maxdiff) {
 
   // check grid x-y
   if (fabs(ppstart.first-pptarget.first) < 2 && fabs(ppstart.second-pptarget.second) < 2) // one grid place only
-    if (fabs(zstart-ztarget) < maxdiff+0.1)    // closer than max z difference
+    if (fabs(zstart-ztarget) < 3*maxdiff+0.1)    // closer than max z difference
       return true;
   return false;
 }
@@ -462,9 +492,12 @@ std::vector<int> GraphClusterer3D::all_deadends(Graph gg) {
   }
 
   std::vector<int> xwallspecial = check_xwall(gg);
-  if (xwallspecial.size()) // combine with ends
+  if (xwallspecial.size()) { // combine with ends
     ends.insert(ends.end(), xwallspecial.begin(), xwallspecial.end());
-
+//     for (int xw : xwallspecial)
+//       std::cout << "from xwall: " << xw << " ";
+  }
+  //  std::cout << std::endl;
   return ends;
 }
 
@@ -495,12 +528,14 @@ std::vector<int> GraphClusterer3D::check_xwall(Graph gg) {
     if (node.first.second == height-1) // book extreme bottom row for x-wall
       found_bot.push_back(index);
   }
-
+  // pattern - triangle challenge - no singly connected node
+  // ...OO.. or ....0..
+  // ....O..    ...00..
   // for top xwall row 
   int previous;
   std::vector<std::vector<int> > rowcls;
   std::vector<int> nn;
-  if (found_top.size()>=2) { // any consecutive neighbours in that row?
+  if (found_top.size()>=1) { // any consecutive neighbours in that row?
     node = nodes.at(found_top[0]);
     previous = node.first.first; // previous column
     for (int idx : found_top) {
@@ -522,12 +557,14 @@ std::vector<int> GraphClusterer3D::check_xwall(Graph gg) {
       found.push_back(entry[0]);
       found.push_back(entry[1]);
     }
+    else if (entry.size()== 1)
+      found.push_back(entry[0]);
   }
 
   // for bottom xwall row 
   nn.clear();
   rowcls.clear();
-  if (found_bot.size()>=2) { // any consecutive neighbours in that row?
+  if (found_bot.size()>=1) { // any consecutive neighbours in that row?
     node = nodes.at(found_bot[0]);
     previous = node.first.first; // previous column
     for (int idx : found_bot) {
@@ -549,6 +586,8 @@ std::vector<int> GraphClusterer3D::check_xwall(Graph gg) {
       found.push_back(entry[0]);
       found.push_back(entry[1]);
     }
+    else if (entry.size()== 1)
+      found.push_back(entry[0]);
   }
 
   return found;
@@ -1111,7 +1150,7 @@ void ZClusterer::zSplitCluster(unsigned int id, double zlimit) {
 
 double ZClusterer::histogramSplit(std::valarray<double>& allz, double start, double end) {
   // discretize z-axis
-  int nbins = 6; // coarse histogram resolution in z, avoid gaps
+  int nbins = floor(fabs(end - start)/100.0)>4 ? floor(fabs(end - start)/100.0) : 4; // coarse histogram resolution in z, min. 5
   double step = floor(fabs(end - start) / nbins);
   
   if (fabs((end - start)) / stepwidth <= 8.0) return DUMMY; // z coordinate error size = flat in z, no split
