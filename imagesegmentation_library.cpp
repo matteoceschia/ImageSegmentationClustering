@@ -83,8 +83,9 @@ void GraphClusterer3D::cluster(std::unordered_map<unsigned int, std::vector<Meta
     
     //***
     // set up z-difference search
+    std::sort(zonly.begin(), zonly.end());
     double maxdifference=0.0;
-    for (int j=1;j<(int)zonly.size();j++) { // for all z
+    for (int j=1;j<(int)zonly.size();j++) { // all mutual differences
       double slope = zonly[j] - zonly[j-1];
       if (fabs(slope) > maxdifference) maxdifference = fabs(slope);
     }
@@ -155,43 +156,43 @@ void GraphClusterer3D::cluster(std::unordered_map<unsigned int, std::vector<Meta
       newhits.clear();
     }
 
-    int j=1;
     for (auto& cl : newcls) {
       std::vector<MetaInfo> hits = cl.second;
-      clustercopy[clustercopy.size() + j] = hits;
-      j++;
+      clustercopy[clustercopy.size() + 1] = hits;
+    }
+
+    // sweeep leftovers
+    bool leftover = true;
+    std::vector<MetaInfo> unclustered;
+    std::vector<MetaInfo>::iterator hititerator;
+    for (auto& nd : nodes) {
+      for (auto& cl : clustercopy) {
+	std::vector<MetaInfo> hits = cl.second;
+	for (auto& minfo : hits) {
+	  if (nd.first.first  == minfo.column &&
+	      nd.first.second == minfo.row &&
+	      nd.second       == minfo.z) {
+	    leftover = false;
+	    continue;
+	  }
+	}
+      }
+      if (leftover) {
+	newmi.side = side;
+	newmi.column = nd.first.first;
+	newmi.row    = nd.first.second;
+	newmi.z      = nd.second;
+	unclustered.push_back(newmi);
+	std::cout << "found leftover" << " " << newmi.column << " " << newmi.row << " " << newmi.z << std::endl;
+      }
+      leftover = true;
+    }
+    if (!unclustered.empty()) { // add to container
+      clustercopy[clustercopy.size() + 1] = unclustered;
+      unclustered.clear();
     }
   } 
 
-  // sweeep leftovers
-  bool leftover = true;
-  std::vector<MetaInfo> unclustered;
-  std::vector<MetaInfo>::iterator hititerator;
-  for (auto& nd : nodes) {
-    for (auto& cl : clustercopy) {
-      std::vector<MetaInfo> hits = cl.second;
-      for (auto& minfo : hits) {
-	if (nd.first.first  == minfo.column &&
-	    nd.first.second == minfo.row &&
-	    nd.second       == minfo.z) {
-	  leftover = false;
-	  continue;
-	}
-      }
-    }
-    if (leftover) {
-      newmi.side = side;
-      newmi.column = nd.first.first;
-      newmi.row    = nd.first.second;
-      newmi.z      = nd.second;
-      unclustered.push_back(newmi);
-      std::cout << "found leftover" << " " << newmi.column << " " << newmi.row << " " << newmi.z << std::endl;
-    }
-    leftover = true;
-  }
-  if (unclustered.size())
-    clustercopy[clustercopy.size() + 1] = unclustered;
-  
   //***
   // finish analysing clusters
   clusters.clear();
@@ -267,15 +268,15 @@ std::unordered_map<unsigned int, std::vector<MetaInfo> > GraphClusterer3D::clust
   std::vector<int> dead_ends = all_deadends(gg);
   std::vector<int> starts = column_nodes(gg, 0); // column 0 for starts
   std::vector<int> targets = column_nodes(gg, width-1); // column width-1 for targets
-  for (int idx : dead_ends)
-     std::cout << "dead_end index: " << idx << " ";
-   std::cout << std::endl;
-  for (int idx : starts)
-    std::cout << "starts index: " << idx << " ";
-  std::cout << std::endl;
-  for (int idx : targets)
-    std::cout << "targets index: " << idx << " ";
-  std::cout << std::endl;
+//   for (int idx : dead_ends)
+//      std::cout << "dead_end index: " << idx << " ";
+//    std::cout << std::endl;
+//   for (int idx : starts)
+//     std::cout << "starts index: " << idx << " ";
+//   std::cout << std::endl;
+//   for (int idx : targets)
+//     std::cout << "targets index: " << idx << " ";
+//   std::cout << std::endl;
 
   // curving paths to consider
   if (targets.empty()) {

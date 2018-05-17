@@ -46,7 +46,7 @@ int pattern1()
 
   gcl.cluster(clscollection);
   std::unordered_map<unsigned int, std::vector<MetaInfo> > cls = gcl.getClusters();
-  return extract(cls); // should be 10
+  return extract(cls); // should be 9
 }
 
 
@@ -135,7 +135,7 @@ int pattern3() // dead-end branch test
 
   gcl.cluster(clscollection);
   std::unordered_map<unsigned int, std::vector<MetaInfo> > cls = gcl.getClusters();
-  return extract(cls); // should be 9
+  return extract(cls); // should be 8
 }
 
 
@@ -159,7 +159,7 @@ int extract(std::unordered_map<unsigned int, std::vector<MetaInfo> >& cls) {
 
 
 TEST_CASE( "Cluster A", "[falaise][graphtest][nclustersA]" ) {
-  REQUIRE( pattern1() == 10 );
+  REQUIRE( pattern1() == 9 );
 }
 
 TEST_CASE( "Cluster B", "[falaise][graphtest][nclustersB]" ) {
@@ -167,5 +167,5 @@ TEST_CASE( "Cluster B", "[falaise][graphtest][nclustersB]" ) {
 }
 
 TEST_CASE( "Cluster C", "[falaise][graphtest][nclustersC]" ) {
-  REQUIRE( pattern3() == 9 );
+  REQUIRE( pattern3() == 8 );
 }
