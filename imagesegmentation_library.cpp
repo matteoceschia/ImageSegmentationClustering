@@ -4,111 +4,631 @@
 #include <algorithm>
 #include <iostream>
 
+// ROOT
+#include <TKDTree.h>
+
 // this
 #include <imagesegmentation_library.h>
-
-// *****
-// ** Imagesegmentation methods
-// *****
-void ImageSegmentation::cluster(std::vector<bool> data) {
-  if (clscollection.size())
-    clscollection.clear();
-
-  labels->label(data); // create labels from ImageLabel object
-
-  // get the image collection of separate structures
-  std::list<std::vector<bool> > icollection = labels->imagecollection();
-
-  // test splitting with an image input
-
-  for (auto& im : icollection) { // for all images in the collection
-    labels->label(im); // splitting overwrites labels
-    cls = labels->getLabels(); // book them now for simplest single cluster
-
-    if (labels->is_splitting(im)) {
-      gr->cluster(im); // fill clusters
-      cls = gr->getClusters();
-    }
-    // simple clusters already in cls
-    clscollection.push_back(cls); // basket collection
-  }
-}
-
-
-
-std::unordered_map<unsigned int, std::list<Pixel> > ImageSegmentation::getClusters() {
-  // re-order the cluster numbering
-  std::unordered_map<unsigned int, std::list<Pixel> > countedcls;
-  unsigned int counter = 1; // count clusters from 1
-  for (auto& x : clscollection) { // maps x in a vector
-    for (auto& y : x) {           // loop through map entries y, make new keys
-      countedcls[counter] = y.second;
-      counter++;
-    }
-  }
-  return countedcls; // ready for image2gg
-}
-
-
-
 
 
 // *****
 // ** Graph clustering methods
 // *****
-void GraphClusterer::cluster(std::vector<bool> data) {
-  if (cls.size())
-    cls.clear();
-  std::vector<int> oneDdata;
-  std::vector<std::vector<int> > cluster1D;
+void GraphClusterer3D::cluster(std::unordered_map<unsigned int, std::vector<MetaInfo> >& cls) {
+  //***
+  // init
+  if (finalcls.size())
+    finalcls.clear();
+  if (clusters.size())
+    clusters.clear();
+  clusters = cls; // copy to work with
+  nodes.clear();
+  vertices.clear();
+  edges.clear();
+  store.clear();
+  std::unordered_map<unsigned int, std::vector<MetaInfo> > clustercopy;
+
+  Pixel pp;
+  GGHit hit;
+
+  //***
+  // prepare internal data using GGHit instead of metainfo 
+  std::vector<double> zonly;
+  std::vector<std::vector<int> > lumped;
+  std::vector<GGHit>::iterator nodeiterator;
+  int position=0;
+  std::vector<int>::iterator lumpiterator;
+  std::vector<int> ggindex;
+  std::vector<std::vector<int> > lumpedNodes;
   
-  for (int col=0; col < width; col++) { // loop all columns
-    for (int row=0; row < height; row++)
-      if (data[row*width + col]) // image comes as boolean vector
-	oneDdata.push_back(row);
+  MetaInfo newmi; // replacement meta info for original
+  std::vector<MetaInfo> newhits; // contains replacement hits
+  
+  std::unordered_map<unsigned int, std::vector<MetaInfo> > newcls;
+  for (auto& entry : clusters) {
+    std::cout << "cluster nr. " << entry.first << std::endl;
+    nodes.clear();
+    edges.clear();
+    zonly.clear();
+    store.clear();
+    vertices.clear();
+
+    std::vector<MetaInfo> cluster = entry.second;
+    side = cluster.at(0).side; // same for all metainfos in cluster
+
+    if (cluster.size()<3) {
+      clustercopy[clustercopy.size() + 1] = cluster; // rescue
+      continue; // next in loop; leave as is
+    }
+
+    for (auto& mi: cluster) {
+      // fill unique vertices set
+      pp.first   = mi.column; // stays integer x=column
+      pp.second  = mi.row;    // integer y=row
+      hit.first  = pp;       // pixel in first
+      hit.second = mi.z;  // z in second
+      zonly.push_back(mi.z);
+      vertices.insert(hit); // fill vertices set
+    }
+    //***
+    // turn vertices to countable nodes container
+    int nn=0;
+    for (auto& nd : vertices) {
+      //      std::cout << "GGHit Node " << nn << ": "<< nd.first.first << " " << nd.first.second << ", " << nd.second << std::endl;
+      nodes.push_back(nd);
+      nn++;
+    }    
     
-    cluster1D = oneDcluster(oneDdata);
-    store[col] = cluster1D; // store in map of nodes
-    oneDdata.clear(); // ready for next column
-    cluster1D.clear();
+    //***
+    // set up z-difference search
+    std::sort(zonly.begin(), zonly.end());
+    double maxdifference=0.0;
+    for (int j=1;j<(int)zonly.size();j++) { // all mutual differences
+      double slope = zonly[j] - zonly[j-1];
+      if (fabs(slope) > maxdifference) maxdifference = fabs(slope);
+    }
+    //    std::cout << "max z difference: " << maxdifference << std::endl;
+
+    //***
+    // lump nodes in 1D
+    // index store of nodes with column map index where store holds node indices
+    for (int i=0;i<width;i++) { // loop over tracker columns
+      for (int j=0;j<(int)nodes.size();j++)
+	if (nodes[j].first.first == i) // gets GGHit.first=>Pixel.first->column
+	  ggindex.push_back(j); // all GGHit in column i
+      lumpedNodes = cluster1D(ggindex, maxdifference);
+      if (lumpedNodes.size())
+	store[i] = lumpedNodes;
+      ggindex.clear();
+    }
+
+    //***
+    // make more clusters from input clusters
+    // edges require neighbour search with limited z distance
+    //    std::cout << "store size: " << store.size() << std::endl;
+    if (store.size()<2) {  // just one lumped node - no graph possible
+      clustercopy[clustercopy.size() + 1] = cluster; // rescue
+      //      std::cout << "store single lumped node." << std::endl;
+      continue;  // next in loop; leave as is
+    }
+
+    newcls = cluster_withgraph(maxdifference);
+
+    vertices.clear(); // recycle
+    //***
+    // replace all nodes in clusters with lumped nodes
+    // since they  belong together - will create plenty of identical clusters
+    // uses vertices set again to have only unique nodes after replacement
+    for (auto& cl : newcls) {
+      unsigned int clsid = cl.first;
+      std::vector<MetaInfo> hits = cl.second;
+      for (auto& mi : hits) {
+	// make a GGHit for finding
+	pp.first   = mi.column; // stays integer x=column
+	pp.second  = mi.row;    // integer y=row
+	hit.first  = pp;       // pixel in first
+	hit.second = mi.z;  // z in second
+	
+	lumped = store[mi.column]; // which lump of nodes contains this GGHit
+	nodeiterator = std::find(nodes.begin(), nodes.end(), hit);
+	if (nodeiterator!=nodes.end()) { // found GGHit
+	  position = nodeiterator - nodes.begin(); // node index
+	  for (auto& nds : lumped) { // nds=vector<int>
+	    lumpiterator = std::find(nds.begin(), nds.end(), position);
+	    if (lumpiterator!=nds.end()) { // found index in lumped nodes
+	      for (int idx : nds)
+		vertices.insert(nodes[idx]); // all the lumped nodes, repeats not accepted in set
+	    }
+	  }
+	}
+      }
+      for (auto& gg : vertices) { // turn GGHits back into new meta info's for replacement
+	newmi.side = side;
+	newmi.column = gg.first.first;
+	newmi.row    = gg.first.second;
+	newmi.z      = gg.second;
+	newhits.push_back(newmi);
+      }
+      vertices.clear();
+      newcls[clsid] = newhits; // overwrite the current cluster
+      newhits.clear();
+    }
+
+    for (auto& cl : newcls) {
+      std::vector<MetaInfo> hits = cl.second;
+      clustercopy[clustercopy.size() + 1] = hits; // store away to safety
+    }
+
+    // sweeep leftovers
+    bool leftover = true;
+    std::vector<MetaInfo> unclustered;
+    std::vector<MetaInfo>::iterator hititerator;
+    for (auto& nd : nodes) {
+      for (auto& cl : clustercopy) {
+	std::vector<MetaInfo> hits = cl.second;
+	for (auto& minfo : hits) {
+	  if (nd.first.first  == minfo.column &&
+	      nd.first.second == minfo.row &&
+	      nd.second       == minfo.z) {
+	    leftover = false;
+	    continue;
+	  }
+	}
+      }
+      if (leftover) {
+	newmi.side = side;
+	newmi.column = nd.first.first;
+	newmi.row    = nd.first.second;
+	newmi.z      = nd.second;
+	unclustered.push_back(newmi);
+	//	std::cout << "found leftover" << " " << newmi.column << " " << newmi.row << " " << newmi.z << std::endl;
+      }
+      leftover = true;
+    }
+    if (!unclustered.empty()) { // add to container
+      clustercopy[clustercopy.size() + 1] = unclustered;  // store away to safety
+      unclustered.clear();
+    }
+  } 
+
+  //***
+  // finish analysing clusters
+  clusters.clear();
+  unsigned int counter = 1; // loop counter
+  for (auto& cl : clustercopy) {
+    std::vector<MetaInfo> hits = cl.second;
+//     for (auto& minfo : hits)
+//       std::cout << "in clustercopy - nr " << counter << " " << minfo.column << " " << minfo.row << " " << minfo.z << std::endl;
+    clusters[counter] = hits;
+    counter++;
   }
-  // check store
-//   for (auto& entry : store) {
-//     std::cout << "Store key = " << entry.first << std::endl;
-//     for (auto& nds : entry.second)
-//       for (int nd : nds)
-// 	std::cout << "row: " << nd << std::endl;
-//   }
-  cluster_withgraph(); // uses store and outputs in cls data member
-  remove_copies(); // clear out cluster store of identical copies.
+  
+  remove_copies(); // clear out clusters store of identical copies.
 }
 
 
-void GraphClusterer::remove_copies() {
+std::vector<std::vector<int> > GraphClusterer3D::cluster1D(std::vector<int>& nodeindex, double maxdiff) {
+  std::vector<std::vector<int> > lumped;
+  if (nodeindex.size()<1) return lumped; // empty case, ensures store has the column
+
+  std::vector<int> nd;
+  int row = nodes[nodeindex[0]].first.second; // row of first lumped node
+  double z= nodes[nodeindex[0]].second; // z of first lumped node
+  for (int& idx : nodeindex) {
+    if (fabs(nodes[idx].first.second - row) < 2 && fabs(nodes[idx].second - z) < maxdiff+0.1) { // nearest neighbour
+      nd.push_back(idx); // first entry is trivially in
+      row = nodes[idx].first.second; // set to new comparison
+      z   = nodes[idx].second;
+    }
+    else { // distance too large in row or z => next cluster
+      lumped.push_back(nd);
+      nd.clear();
+      nd.push_back(idx);
+      row = nodes[idx].first.second;
+      z   = nodes[idx].second;
+    }
+  }
+  lumped.push_back(nd); // save the final node collection
+
+//   for (int nn=0;nn<lumped.size();nn++) {
+//     std::cout << "lumped nodes nr. " << nn << std::endl;
+//     for (int id : lumped[nn])
+//       std::cout << "id=" << id << " ";
+//     std::cout << std::endl;
+//   }
+
+  return lumped;
+}
+
+
+
+std::unordered_map<unsigned int, std::vector<MetaInfo> > GraphClusterer3D::cluster_withgraph(double maxdiff) {
+  // first fill edges container, then use graph
+  make_edges(maxdiff); // limited z to make edges; grid x,y is known
+  int entries = (int)nodes.size();
+  
+  Graph gg(entries);
+  // fill graph with index integers corresponding to nodes container
+  for (const std::pair<GGHit, GGHit> edge : edges) {
+    GGHit start_node = edge.first;
+    GGHit end_node   = edge.second;
+    
+    std::vector<GGHit>::iterator it1 = std::find(nodes.begin(), nodes.end(), start_node);
+    std::vector<GGHit>::iterator it2 = std::find(nodes.begin(), nodes.end(), end_node);
+    
+    int start_pos = it1 - nodes.begin(); // index of start node in node container
+    int end_pos = it2 - nodes.begin(); // index of end node in node container
+    //    std::cout << "fill graph: Edge index of node start: " << start_pos << " index end:" << end_pos << std::endl;
+    gg.addEdge(start_pos, end_pos);
+  } // graph filled and operative
+  
+  // get the start and target nodes for the path search
+  std::vector<int> dead_ends = all_deadends(gg);
+  std::vector<int> starts = column_nodes(gg, 0); // column 0 for starts
+  std::vector<int> targets = column_nodes(gg, width-1); // column width-1 for targets
+//   for (int idx : dead_ends)
+//      std::cout << "dead_end index: " << idx << " ";
+//    std::cout << std::endl;
+//   for (int idx : starts)
+//     std::cout << "starts index: " << idx << " ";
+//   std::cout << std::endl;
+//   for (int idx : targets)
+//     std::cout << "targets index: " << idx << " ";
+//   std::cout << std::endl;
+
+  // curving paths to consider
+  if (targets.empty()) {
+    int whichcol = width-2;
+    std::vector<int> nextcolumn = column_nodes(gg, whichcol); // column width-2 for targets
+    while (nextcolumn.empty() && whichcol > 0) {
+      whichcol--;
+      nextcolumn = column_nodes(gg, whichcol); // column whichcol for targets
+    }
+    if (!nextcolumn.empty())
+      targets = nextcolumn;
+  }
+  if (starts.empty()) {
+    int whichcol = 1;
+    std::vector<int> nextcolumn = column_nodes(gg, whichcol); // column 1 for starts
+    while (nextcolumn.empty() && whichcol < width-1) {
+      whichcol++;
+      nextcolumn = column_nodes(gg, whichcol); // column whichcol for starts
+    }
+    if (!nextcolumn.empty())
+      starts = nextcolumn;
+  }
+//   for (int idx : starts)
+//     std::cout << "starts index: " << idx << " ";
+//   std::cout << std::endl;
+//   for (int idx : targets)
+//     std::cout << "targets index: " << idx << " ";
+//   std::cout << std::endl;
+
+  // curving paths to consider again; complete bending inside tracker
+  starts.insert(starts.end(), targets.begin(), targets.end());
+  targets.insert(targets.end(), starts.begin(), starts.end());
+
+  // merge starts and targets with dead ends
+  starts.insert(starts.end(), dead_ends.begin(), dead_ends.end());
+  targets.insert(targets.end(), dead_ends.begin(), dead_ends.end());
+
+  std::set<int> pathstarts;
+  std::set<int> pathtargets;
+  for (int idx : starts)
+    pathstarts.insert(idx); // get unique starts
+  for (int idx : targets)
+    pathtargets.insert(idx); // get unique targets
+
+  // only one from a lumped node
+  preventLumped(pathstarts);
+  preventLumped(pathtargets);
+
+//   std::cout << "All starts index: ";
+//   for (int idx : pathstarts)
+//     std::cout << idx << " ";
+//   std::cout << std::endl;
+//   std::cout << "All targets index: ";
+//   for (int idx : pathtargets)
+//     std::cout << idx << " ";
+//   std::cout << std::endl;
+
+  // find paths from starts to targets to form clusters  
+  std::list<std::vector<std::vector<int> > > tempCluster;
+  for (int s : pathstarts) {
+    for (int t : pathtargets) {
+      if (gg.isReachable(s, t)) {
+	if (s != t) {
+	  gg.bfsPaths(s, t);
+	  tempCluster.push_back(gg.paths());
+	}
+      }
+    }
+  }
+  return translate(tempCluster); // fill cls map in suitable format
+}
+  
+
+
+void GraphClusterer3D::preventLumped(std::set<int>& indices) {
+  // get starter and target indices pointing at nodes in container
+  // and clear out all but one that are part of a lumped node from store.
+  std::vector<std::vector<int> > lumpedNodes;
+  std::vector<int> output; 
+  std::set<int>::iterator itset;
+
+  for (auto& entry : store) { // check all lumped node indices
+    lumpedNodes = entry.second;
+    for (auto& nd : lumpedNodes) { // vector<int>
+      output.resize(nd.size()+indices.size()); // max+max output container size
+      std::vector<int>::iterator testit = std::set_intersection(nd.begin(), nd.end(), indices.begin(), indices.end(), output.begin());
+      output.resize(testit - output.begin());
+      if (output.size()>0) { // overlap found
+	for (int j=1;j<(int)output.size();j++) {
+	  itset = std::find(indices.begin(), indices.end(), output[j]); // got the first in output[0]
+	  indices.erase(itset); // remove all others with overlap
+	}
+      }
+    }
+  }
+}
+
+
+std::unordered_map<unsigned int, std::vector<MetaInfo> > GraphClusterer3D::translate(std::list<std::vector<std::vector<int> > >& temp) {
+  // return the path indexes back into nodes
+  // and nodes back into a collection of hits
+  // in order to form proper clusters. 
+
+  std::unordered_map<unsigned int, std::vector<MetaInfo> > newcls;
+  unsigned int counter = 1; // cluster numbering from 1
+  MetaInfo mi;
+  GGHit node;
+  std::vector<MetaInfo> hits;
+
+  for (auto& entry : temp) { // vector<vector<int>>
+    for (auto& path : entry ) { // vector<int>
+      //      std::cout << "in translate - key = " << counter << std::endl;
+      for (int index : path) {
+	node = nodes.at(index); // got the node in a path
+	mi.column = node.first.first;  // column in image
+	mi.row    = node.first.second; // row in image
+	mi.z      = node.second;
+	mi.side   = side;
+	//	std::cout << "in translate - " << mi.column << " " << mi.row << " " << mi.z << std::endl;
+	hits.push_back(mi); 
+      } // keep collecting meta infors for every node on path
+      newcls[counter] = hits; // got all hits, store as cluster
+      hits.clear(); 
+      counter++; // ready for next cluster
+    }
+  } // count up all clusters in the temp collection as distinct clusters.
+  return newcls;
+}
+
+
+
+void GraphClusterer3D::make_edges(double maxdiff) {
+  // fill tree with doubles by construction
+  int nentries = (int)nodes.size();
+  int nneighbours = (nentries>=8) ? 8 : nentries;
+  double* x = new double [nentries]; // kdTree needs arrays as input
+  double* y = new double [nentries]; // kdTree needs arrays as input
+  double* z = new double [nentries]; // kdTree needs arrays as input
+
+  int counter=0;
+  for (auto& entry : nodes) { // as stored in nodes
+    Pixel pp = entry.first;
+    x[counter] = pp.first*44.0 + 22.0; // turn to [mm] regular centrepoint at 22 mm
+    y[counter] = pp.second*44.0 + 22.0;    // turn to [mm] in units of cell 44 mm
+    z[counter] = entry.second;                  // is already [mm]
+    counter++;
+  }
+
+  TKDTreeID* hittree = new TKDTreeID(nentries, 3, 1);
+  // fill kdTree here
+  hittree->SetData(0,x);
+  hittree->SetData(1,y);
+  hittree->SetData(2,z);
+  hittree->Build();
+  // kdTree ready to work, make edges for a graph using this
+
+  // turn the kdTree container content into container of edges
+  GGHit start; // to hold the starter hit
+  GGHit target; // to hold the target hit
+
+  edges.clear();
+  double point[3]; // needed for kdTree requests
+  double* dist = new double [nneighbours]; // check on nearest 8 neighbours in grid
+  int* indx = new int [nneighbours];       // where 8 is the maximum posible in a square grid
+
+  for (counter=0; counter<nentries; counter++) {
+    start = nodes.at(counter);
+    point[0] = x[counter];
+    point[1] = y[counter];
+    point[2] = z[counter];
+    hittree->FindNearestNeighbors(point,nneighbours,indx,dist); // index needs to correspond to node index
+    for (int j=0;j<nneighbours;j++) {
+      target = nodes.at(indx[j]);
+      if (is_neighbour(start, target, maxdiff)) 
+	edges.insert(std::make_pair(start, target)); // only unique edges in set
+    }
+
+  }
+
+  delete [] indx;
+  delete [] dist;
+  delete [] x;
+  delete [] y;
+  delete [] z;
+  delete hittree;
+}
+
+
+bool GraphClusterer3D::is_neighbour(GGHit start, GGHit target, double maxdiff) {
+  Pixel ppstart  = start.first;
+  Pixel pptarget = target.first;
+  double zstart  = start.second;
+  double ztarget = target.second;
+
+  if (ppstart.first == pptarget.first && ppstart.second == pptarget.second) // exclude itself as neighbour
+    return false;
+
+  // check grid x-y
+  if (fabs(ppstart.first-pptarget.first) < 2 && fabs(ppstart.second-pptarget.second) < 2) // one grid place only
+    if (fabs(zstart-ztarget) < 3*maxdiff+0.1)    // closer than max z difference
+      return true;
+  return false;
+}
+
+
+std::vector<int> GraphClusterer3D::all_deadends(Graph gg) {
+  std::vector<int> ends;
+  GGHit node;
+  for (int index : gg.nodes()) {
+    node = nodes.at(index); // translate back to node from container
+    if (gg.singleNode(index)) // loose end?
+      if (node.first.first != 0 && node.first.first != width-1) // not at the extreme columns
+	ends.push_back(index);
+  }
+
+  std::vector<int> xwallspecial = check_xwall(gg);
+  if (xwallspecial.size()) { // combine with ends
+    ends.insert(ends.end(), xwallspecial.begin(), xwallspecial.end());
+//     for (int xw : xwallspecial)
+//       std::cout << "from xwall: " << xw << " ";
+  }
+  //  std::cout << std::endl;
+  return ends;
+}
+
+
+
+std::vector<int> GraphClusterer3D::column_nodes(Graph gg, int col) {
+  std::vector<int> found;
+  GGHit node;
+  for (int index : gg.nodes()) {
+    node = nodes.at(index); // translate back to node from container
+    if (node.first.first == col)
+      found.push_back(index);
+  }
+
+  return found;
+}
+
+
+std::vector<int> GraphClusterer3D::check_xwall(Graph gg) {
+  std::vector<int> found;
+  std::vector<int> found_top;
+  std::vector<int> found_bot;
+  GGHit node;
+  for (int index : gg.nodes()) {
+    node = nodes.at(index); // translate back to node from container
+    if (node.first.second == 0) // book extreme top row for x-wall
+      found_top.push_back(index);
+    if (node.first.second == height-1) // book extreme bottom row for x-wall
+      found_bot.push_back(index);
+  }
+  // pattern - triangle challenge - no singly connected node
+  // ...OO.. or ....0..
+  // ....O..    ...00..
+  // for top xwall row 
+  int previous;
+  std::vector<std::vector<int> > rowcls;
+  std::vector<int> nn;
+  if (found_top.size()>=1) { // any consecutive neighbours in that row?
+    node = nodes.at(found_top[0]);
+    previous = node.first.first; // previous column
+    for (int idx : found_top) {
+      node = nodes.at(idx);
+      if (fabs(node.first.first - previous)<2) { // neighbours
+	nn.push_back(idx); // minimum one entry always
+	previous = node.first.first;
+      }
+      else {               // not a neighbour anymore
+	rowcls.push_back(nn); // new row block
+	nn.clear();
+      }
+    }
+    rowcls.push_back(nn); // final row block
+  }
+  // clear out all non-double consecutive row hits
+  for (auto& entry : rowcls) {
+    if (entry.size()== 2) {
+      found.push_back(entry[0]);
+      found.push_back(entry[1]);
+    }
+    else if (entry.size()== 1)
+      found.push_back(entry[0]);
+  }
+
+  // for bottom xwall row 
+  nn.clear();
+  rowcls.clear();
+  if (found_bot.size()>=1) { // any consecutive neighbours in that row?
+    node = nodes.at(found_bot[0]);
+    previous = node.first.first; // previous column
+    for (int idx : found_bot) {
+      node = nodes.at(idx);
+      if (fabs(node.first.first - previous)<2) { // neighbours
+	nn.push_back(idx); // minimum one entry always
+	previous = node.first.first;
+      }
+      else {               // not a neighbour anymore
+	rowcls.push_back(nn); // new row block
+	nn.clear();
+      }
+    }
+    rowcls.push_back(nn); // final row block
+  }
+  // clear out all non-double consecutive row hits
+  for (auto& entry : rowcls) {
+    if (entry.size()== 2) {
+      found.push_back(entry[0]);
+      found.push_back(entry[1]);
+    }
+    else if (entry.size()== 1)
+      found.push_back(entry[0]);
+  }
+
+  return found;
+}
+
+
+void GraphClusterer3D::remove_copies() {
   std::set<unsigned int> removal_keys; // only unique entries
   std::set<unsigned int> visited; // only unique entries
   std::vector<Pixel> starter; // temp storage: copies of the std::list
   std::vector<Pixel> target; // in order to be able to sort the container
   std::set<unsigned int>::iterator findit;
-  for (auto& entry : cls) { // not in order, so book visited keys
+  MetaInfo mi;
+  Pixel hit; // assess equality only on integer grid as double z is a problem
+  for (auto& entry : clusters) { // not in order, so book visited keys
     unsigned int key1 = entry.first; // compare this
     visited.insert(key1);
-    for (auto& val : entry.second) starter.push_back(val);
+    for (auto& val : entry.second) { // yields meta info
+      hit.first  = val.column;
+      hit.second = val.row;
+      starter.push_back(hit);
+    }
     std::sort(starter.begin(), starter.end());
-    //    std::cout << " visited key " << key1 << " " << std::endl;
-    //    std::cout << "\nstarter from " << key1 <<std::endl;
-    //    for (auto& pp : starter) std::cout << "x=" << pp.first << " y=" << pp.second << " ";
-    //    std::cout << std::endl;
-
-    for (auto& comparator : cls) { // to the rest in the container
+    
+//     std::cout << " visited key " << key1 << " " << std::endl;
+//     std::cout << "\nstarter from " << key1 <<std::endl;
+//     for (auto& pp : starter) std::cout << "x=" << pp.first << " y=" << pp.second << " ";
+//     std::cout << std::endl;
+    
+    for (auto& comparator : clusters) { // to the rest in the container
       findit = std::find(visited.begin(), visited.end(), comparator.first);
 
       if (findit == visited.end()) { // not yet compared to as entry
 	//	std::cout << " against keys " << comparator.first << " ";
-	for (auto& val : comparator.second) target.push_back(val);
+	for (auto& val : comparator.second) { // meta info here
+	  hit.first  = val.column;
+	  hit.second = val.row;
+	  target.push_back(hit);
+	} 
 	std::sort(target.begin(), target.end());
 
-	// avoid subset equality in equal comparison
+	// avoid subset equality in equal comparison; only complete equality counts
 	if (std::equal(target.begin(), target.end(), starter.begin()) && std::equal(starter.begin(), starter.end(), target.begin())) {
 	  removal_keys.insert(comparator.first); // remove equal copies of clusters, only unique keys here
 	  //	  std::cout << " booked " << comparator.first << "==" << key1 << " ";
@@ -118,278 +638,22 @@ void GraphClusterer::remove_copies() {
     }
     starter.clear();
   }
-  std::unordered_map<unsigned int, std::list<Pixel> > newcls;
+  std::unordered_map<unsigned int, std::vector<MetaInfo> > newcls;
   unsigned int counter = 1;
-  for (auto& entry : cls) {
+  for (auto& entry : clusters) {
     findit = std::find(removal_keys.begin(), removal_keys.end(), entry.first);
     if (findit == removal_keys.end()) { // found no key in the removal set
+      //      std::cout << " not found " << entry.first << " in removal keys" << std::endl;
       newcls[counter] = entry.second; // book this clusters
       counter++; // new key
     }
   }
-  std::cout << "cluster size " << cls.size() << " and after copy removal " << newcls.size() << std::endl;
-  cls.clear(); // replace current cluster container
-  cls = newcls; // store the cleaned copy
-}
-
-
-std::unordered_map<unsigned int, std::list<Pixel> > GraphClusterer::getClusters() {
-  return cls;
-}
-
-
-void GraphClusterer::cluster_withgraph() {
-  // first fill edges container, then use graph
-  make_edges(); // vector<pair<pixel,pixel>> in edges container
-  int entries = (int)nodes.size();
-  
-  Graph gg(entries);
-  // fill graph with index integers corresponding to nodes container
-  for (std::pair<Pixel, Pixel>& edge : edges) {
-    std::pair<int,int> start_node = std::make_pair(edge.first.first, edge.first.second);
-    std::pair<int,int> end_node = std::make_pair(edge.second.first, edge.second.second);
-    
-    std::vector<std::pair<int,int>>::iterator it1 = std::find(nodes.begin(), nodes.end(), start_node);
-    std::vector<std::pair<int,int>>::iterator it2 = std::find(nodes.begin(), nodes.end(), end_node);
-    
-    // must be found since nodes were made from edges first.
-    int start_pos = it1 - nodes.begin();
-    int end_pos = it2 - nodes.begin();
-    //    std::cout << "Edge index of node start: " << start_pos << " index end:" << end_pos << std::endl;
-    gg.addEdge(start_pos, end_pos);
-  } // graph filled and operative
-  
-  // get the start and target nodes for the path search
-  std::vector<int> dead_ends = all_deadends(gg);
-  std::vector<int> starts = column_nodes(gg, 0); // column 0 for starts
-  std::vector<int> targets = column_nodes(gg, width-1); // column width-1 for targets
-
-  // curving paths to consider
-  if (targets.empty())
-    targets = starts;
-  else if (starts.empty())
-    starts = targets;
-
-//   for (int idx : dead_ends)
-//     std::cout << "dead_end index: " << idx << " ";
-//   std::cout << std::endl;
-//   for (int idx : starts)
-//     std::cout << "starts index: " << idx << " ";
-//   std::cout << std::endl;
-//   for (int idx : targets)
-//     std::cout << "targets index: " << idx << " ";
-//   std::cout << std::endl;
-
-  // curving paths to consider again
-  starts.insert(starts.end(), targets.begin(), targets.end());
-  targets.insert(targets.end(), starts.begin(), starts.end());
-
-  // merge starts and targets with dead ends
-  starts.insert(starts.end(), dead_ends.begin(), dead_ends.end());
-  targets.insert(targets.end(), dead_ends.begin(), dead_ends.end());
-
-//   for (int idx : starts)
-//     std::cout << "All starts index: " << idx << " ";
-//   std::cout << std::endl;
-//   for (int idx : targets)
-//     std::cout << "All targets index: " << idx << " ";
-//   std::cout << std::endl;
-
-  // find paths from starts to targets to form clusters  
-  std::list<std::vector<std::vector<int> > > tempCluster;
-  for (int s : starts) {
-    for (int t : targets) {
-      if (gg.isReachable(s, t)) {
-	if (s != t) {
-	  gg.bfsPaths(s, t);
-	  tempCluster.push_back(gg.paths());
-	}
-      }
-    }
+  //  std::cout << "cluster size " << clusters.size() << " and after copy removal " << newcls.size() << std::endl;
+  for (auto& entry : newcls)  {
+//     for (auto& hit : entry.second)
+//       std::cout << "in remove copies - nr " << entry.first << " " << hit.column << " " << hit.row << " " << hit.z << std::endl;
+    finalcls[entry.first] = entry.second; // store the cleaned copy
   }
-  translate(tempCluster); // fill cls map in suitable format
-}
-  
-
-void GraphClusterer::translate(std::list<std::vector<std::vector<int> > > temp) {
-  // return the path indexes back into nodes
-  // and nodes back into a collection of pixels
-  // in order to form proper clusters. 
-  // Such clusters can then be treated by
-  // the image2gg utility.
-
-  unsigned int counter = 1; // cluster numbering from 1
-  Pixel pp;
-  std::list<Pixel> pixels;
-  std::pair<int, int> node;
-  std::vector<std::vector<int> > cluster1D;
-  std::vector<int> rows;
-
-  for (auto& entry : temp) { // vector<vector<int>>
-    for (auto& path : entry ) { // vector<int>
-      for (int index : path) {
-	node = nodes.at(index); // got the node in a path
-	cluster1D = store[node.first]; // unravel the store map, key is column
-	rows = cluster1D.at(node.second); // select collection of rows in column
-	for (int row : rows) {
-	  pp.first = node.first; // column in image
-	  pp.second = row;        // row in image
-	  pixels.push_back(pp); 
-	} // collected all pixels for that node
-      } // keep collecting pixels for every node on path
-      cls[counter] = pixels; // got all pixels, store as cluster
-      pixels.clear(); 
-      counter++; // ready for next cluster
-    }
-  } // count up all clusters in the temp collection as distinct clusters.
-}
-
-
-
-void GraphClusterer::make_edges() {
-  // turn the store container content into container of edges
-  int index = 0;
-  int indexNext = 0;
-  Pixel start; // to hold the column as x and node index as y
-  Pixel target; // to hold the column as x and node index as y
-  edges.clear();
-  nodes.clear();
-  vertices.clear();
-
-  //  std::cout << "In make edges:" << std::endl;
-  std::vector<std::vector<int>> layer = store[0]; // start with key=column 0
-
-  for (unsigned int col=1; col<store.size(); col++) {
-    std::vector<std::vector<int>> entry = store[col];
-    for (auto& nodevector : layer) { // vector<int> from vector<vector<int>>
-      for (auto& nextnode : entry) {
-	if (nodes_connected(nodevector, nextnode)) {
-	  start.first = col - 1;
-	  start.second = index;
-	  target.first = col;
-	  target.second = indexNext;
-	  vertices.insert(std::make_pair(start.first, start.second)); // unique nodes only
-	  vertices.insert(std::make_pair(target.first, target.second)); // 
-	  edges.push_back(std::make_pair(start,target));
-	}
-	indexNext++;
-      }
-      index++;
-      indexNext = 0;
-    }
-    index = 0;
-    indexNext = 0;
-    layer = entry; // next layer
-  }
-  // turn vertices to countable nodes container
-  for (auto& nd : vertices)
-    nodes.push_back(nd);
-
-  // check
-//   std::cout << "Full Edge container: " << std::endl;
-//   for (auto& edge : edges) {
-//     Pixel st = edge.first;
-//     Pixel ta = edge.second;
-//     std::cout << "Edge: " << st.first << ", " << st.second << " ;T= "<< ta.first << ", " << ta.second << std::endl;
-//   }
-//   std::cout << "Full Node container: " << std::endl;
-//   int counter = 0;
-//   for (auto& nd : nodes) {
-//     std::cout << "Node " << counter << ": S= " << nd.first << ", " << nd.second << std::endl;
-//     counter++;
-//   }
-}
-
-
-bool GraphClusterer::nodes_connected(std::vector<int> va, std::vector<int> vb) {
-  // check for overlap in rows of container content
-
-  std::vector<int> output1(va.size()+vb.size()); // max+max output container size
-  std::vector<int> output2(va.size()+vb.size()); // there are 3 tests to perform
-  std::vector<int> output3(va.size()+vb.size()); // 
-
-  std::sort(va.begin(), va.end()); // complete sort of vector
-  std::sort(vb.begin(), vb.end());
-
-  // shifted array
-  std::vector<int> p1;
-  std::vector<int> m1;
-  for (int entry : va) {
-    p1.push_back(entry+1);
-    m1.push_back(entry-1);
-  }
-
-  // now can apply set_intersection on vector
-  std::vector<int>::iterator test1 = std::set_intersection(va.begin(), va.end(), vb.begin(), vb.end(), output1.begin());
-  output1.resize(test1 - output1.begin());
-  if (output1.size()>0) // direct overlap
-    return true;
-
-  std::vector<int>::iterator test2 = std::set_intersection(p1.begin(), p1.end(), vb.begin(), vb.end(), output2.begin());
-  output2.resize(test2 - output2.begin());
-  if (output2.size()>0) // neighbour overlap
-    return true;
-
-  std::vector<int>::iterator test3 = std::set_intersection(m1.begin(), m1.end(), vb.begin(), vb.end(), output3.begin());
-  output3.resize(test3 - output3.begin());
-  if (output3.size()>0) // neighbour overlap
-    return true;
-
-  return false;
-}
-
- 
-
-std::vector<int> GraphClusterer::all_deadends(Graph gg) {
-  std::vector<int> ends;
-  std::pair<int, int> node;
-  for (int index : gg.nodes()) {
-    node = nodes.at(index); // translate back to node from container
-    if (gg.singleNode(index)) // loose end?
-      if (node.first != 0 && node.first != width-1) // not at the extreme columns
-	ends.push_back(index);
-  }
-
-  return ends;
-}
-
-
-
-std::vector<int> GraphClusterer::column_nodes(Graph gg, int col) {
-  std::vector<int> found;
-  std::pair<int, int> node;
-  for (int index : gg.nodes()) {
-    node = nodes.at(index); // translate back to node from container
-    if (node.first == col)
-      found.push_back(index);
-  }
-
-  return found;
-}
-
-
-
-std::vector<std::vector<int> > GraphClusterer::oneDcluster(std::vector<int> oneDdata) {
-  // input vector of row indices with pixels set to On
-  std::vector<std::vector<int> > cluster1D;
-  if (oneDdata.size()<1) return cluster1D; // empty case
-
-  std::vector<int> node;
-  int row = oneDdata[0]; // starting point
-  for (int& entry : oneDdata) {
-    if ((entry - row) < 2) { // nearest neighbour
-      node.push_back(entry); // first entry is trivially in
-      row = entry;
-    }
-    else { // distance > 1 => next cluster
-      cluster1D.push_back(node);
-      node.clear();
-      node.push_back(entry);
-      row  = entry;
-    }
-  }
-  cluster1D.push_back(node); // save the final node collection
-  return cluster1D;
 }
 
 
@@ -834,31 +1098,10 @@ void ZClusterer::zSplit(unsigned int clsid, std::vector<MetaInfo>& cls) {
   double zlimit = histogramSplit(allz, start, end);
 
   if (zlimit != DUMMY) {
-    std::cout << "case 1: zlimit = " << zlimit << std::endl;
+    //    std::cout << "case 1: zlimit = " << zlimit << std::endl;
     zSplitCluster(clsid, zlimit);
     return;
   }
-
-  //********************************
-  // find discontinuity in x-z slope
-  std::vector<std::pair<int, double> > allxz(cls.size()); // permits sorting for x in pair
-  std::pair<int, double> xz;
-  for (auto& mi : cls) {
-    xz.first  = mi.column;
-    xz.second = mi.z;
-    allxz.push_back(xz); // fill
-  }
-  std::sort(allxz.begin(),allxz.end()); // in order; maybe not necessary
-  
-  // Case 2: check all x-z slopes on differences
-  zlimit = slopeSplit(allxz);
-
-  if (zlimit != DUMMY) {
-    std::cout << "case 2: zlimit = " << zlimit << std::endl;
-    zSplitCluster(clsid, zlimit);
-    return;
-  }
-
 }
 
 
@@ -906,11 +1149,10 @@ void ZClusterer::zSplitCluster(unsigned int id, double zlimit) {
 
 double ZClusterer::histogramSplit(std::valarray<double>& allz, double start, double end) {
   // discretize z-axis
-  int nbins = 4; // coarse histogram resolution in z, avoid gaps
-
-  double step = fabs((end - start)/nbins);
-  //  std::cout << "histoSplit, step " << step << std::endl;
-  if (fabs((end - start)) / stepwidth <= 3.0) return DUMMY; // z coordinate error size = flat in z, no split
+  int nbins = floor(fabs(end - start)/100.0)>4 ? floor(fabs(end - start)/100.0) : 4; // coarse histogram resolution in z, min. 5
+  double step = floor(fabs(end - start) / nbins);
+  
+  if (fabs((end - start)) / stepwidth <= 8.0) return DUMMY; // z coordinate error size = flat in z, no split
 
   std::vector<int> histogram(nbins+1, 0); // fill with zero
 
@@ -926,56 +1168,10 @@ double ZClusterer::histogramSplit(std::valarray<double>& allz, double start, dou
   
   double zlimit = splitFinder(histogram); // find detectable absolute gap in z
   if (zlimit != DUMMY) {
-//     std::cout << "split from histogam." << std::endl;
     return zlimit * step + start;
   }
   return DUMMY; // no gap found
 }
-
-
-
-double ZClusterer::slopeSplit(std::vector<std::pair<int, double> >& allxz) {
-  int diffbins = 5; // difference histogram
-  std::vector<int> diffhistogram(diffbins+1, 0); // fill with zero
-  std::vector<double> zonly(allxz.size()); // needs sorted z values, not possible with valarray
-
-  for (unsigned int i=0;i<allxz.size();i++) zonly[i]=allxz[i].second; // copy
-
-  // set up difference histogram
-  double maxslope=0.0;
-  for (int j=1;j<(int)zonly.size();j++) { // for all z
-    double slope = zonly[j] - zonly[j-1];
-    if (fabs(slope) > maxslope) maxslope = slope;
-  }
-  double diffstep = fabs(maxslope)/diffbins; // biggest difference binning
-  //  std::cout << "diffhisto, step " << diffstep << std::endl;
-
-  // fill slope histogram
-  for (int j=1;j<(int)zonly.size();j++) { // for all z
-    int bucket = (int)floor((zonly[j] - zonly[j-1]) / diffstep); // which bin
-    diffhistogram[bucket] += 1; // increment
-  }
-
-//   for (int bin : diffhistogram)
-//     std::cout << "difference histo, bin " << bin << std::endl;
-
-    if (fabs(maxslope) / stepwidth <= 3.0) return DUMMY; // z coordinate error size = flat in z, no split
-    double zlimit = splitFinder(diffhistogram); // otherwise look for gap in differences
-    if (zlimit != DUMMY) {
-      double slopelimit = zlimit * diffstep;
-      int nn = 1;
-      double zdiff = zonly[nn] - zonly[nn-1];
-      while (nn<zonly.size() && zdiff<slopelimit) {
-	nn++;
-	zdiff = zonly[nn] - zonly[nn-1];
-      }
-//       std::cout << "split from slopes." << std::endl;
-      return (zonly[nn]+zonly[nn-1])*0.5; // half-way z between big slope change
-    }
-
-  return DUMMY;
-}
-
 
 
 double ZClusterer::splitFinder(std::vector<int>& hist) {

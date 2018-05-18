@@ -13,12 +13,13 @@
 #include <string>
 // - Bayeux/dpp:
 #include <bayeux/dpp/base_module.h>
+
 // - Falaise:
 #include <falaise/snemo/datamodels/calibrated_data.h>
 #include <falaise/snemo/datamodels/tracker_clustering_data.h>
+
 // This project:
 #include <imagesegmentation_library.h>
-
 
 /// \brief Tracker clustering module using the image segmentation algorithm
 class imagesegmentation_clustering_module : public dpp::base_module
@@ -53,7 +54,6 @@ protected:
 private:
 	int eventCounter;
 	std::string _TCD_label_;
-	ImageSegmentation* iseg;
 	
 	// Macro to automate the registration of the module :
 	DPP_MODULE_REGISTRATION_INTERFACE(imagesegmentation_clustering_module)

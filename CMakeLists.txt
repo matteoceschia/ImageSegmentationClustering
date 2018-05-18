@@ -6,6 +6,9 @@ project(ImageSegmentation)
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 find_package(Falaise REQUIRED)
 
+# Need ROOT library separately
+find_package(ROOT REQUIRED)
+
 # find the headers
 include_directories(.)
 
@@ -16,9 +19,13 @@ add_library(ImageSegmentation SHARED imagesegmentation_library.h
 			      imagesegmentation_clustering_module.cpp)
 target_link_libraries(ImageSegmentation PUBLIC Falaise::FalaiseModule)
 
-# Build a dynamic library from our sources for testing
+
+# Build a dynamic library from our sources for algorithm only
+# required for testing executables.
+include_directories(${ROOT_INCLUDE_DIRS})
 add_library(ISegAlgorithm SHARED imagesegmentation_library.h 
 			  imagesegmentation_library.cpp)
+target_link_libraries(ISegAlgorithm PUBLIC ${ROOT_LIBRARIES})
 
 
 # Configure example pipeline script for use from the build dir

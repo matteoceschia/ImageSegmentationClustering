@@ -90,6 +90,42 @@ This module also attempts a first use of the Catch test framework for Falaise
 modules. All unit tests address the algorithm only, not the Falaise module
 structure nor the embedding of this module into flreconstruct.
 
+## Cluster process:
+
+Two filters simplify clustering tasks before the main clustering algorithm, 
+currently the 3D graphclustering algorithm, finishes the process. Algorithm
+(A) filters the image of a tracker event as projected in the x-y-plane. This
+is a natural projection since the resulting grid is made of the tracker cells
+themselves, a 113 by 9 image for each tracker half.
+
+Filtering with (A) involves simply the image label algorithm which seeks to
+separate each separately connected structure in the image, see below. The next
+filter then introduces the continuous z-coordinate information and attempts to
+utilize those measurements for each hit in a labelled cluster. No natural
+discretization is offered as with the geiger grid hence a conservative
+histogram discretization is attempted. The aim for this algorithm (B), see
+below, is simply to detect large gaps or splits in z within previously
+labelled structures in order to split them up further.
+
+Once the filters have separated structures in the tracker according to clear
+gaps in all three coordinates, one may assume to be left with reasonably
+compact and internally completely connectable structures. That assumption
+allows to analyse each structure as a graph with well defined spatial
+connections between geiger hits, here taken as nodes of the graph. Algorithm
+(C) describes such a 3D graphclusterer.
+
+The clustering process idea is to leave clustering as dumb as possible,
+i.e. maximise efficiency at the cost of purity. There should be no unclustered
+hits left and the set of clusters must contain the true clusters. Increasing
+purity, i.e. removing extraneous clusters is left to subsequent processing
+at the next stage of reconstruction. 
+
+Dumbness of the algorithm here refers to a minimal set of assumptions, for
+instance no information on geometry other than the extent of the tracker image
+is required. The clustering is indifferent to lines or helices or any other
+structure properties. Such physics information is deferred to the next stage
+of processing, for instance using fitting of models to structures.
+
 ## Algorithms: (A) Connected structure search
 
 As the name suggests, this cluster algorithm considers the tracker geiger
@@ -98,9 +134,9 @@ the demonstrator tracker will hardly be ripped apart in the near future, this
 arrangement of geiger cells is fixed in the code and not considered to be
 configurable. 
 
-The first algorithm targets the simplest structures to cluster in an event,
+This first algorithm targets the simplest structures to cluster in an event,
 checks that they are indeed simple and proceeds or hands over the entire event
-to a second algorithm to deal with more complicated structures. It does so for
+to a second algorithm filtering the structures further. It does so for
 each tracker half separately. The image under consideration is hence a 9
 columns times 113 rows pixel image.
 
@@ -115,13 +151,13 @@ tracker, each pixel can have eight neighbours apart from the perimeter pixels.
 The disadvantage is that no assumptions are made hence N tracks coming
 together at some random points will be considered connected and become a
 single cluster. That is obviously wrong. The method considers the simplest
-possible split of a singly connected structure before handing over to the
-second method for anything else. This, together with simple, disconnected
+possible split of a singly connected structure before handing over to other
+methods for anything else. This, together with simple, disconnected
 structures, covers the majority of tracker events and is correspondingly
 swift. 
 
 For splitting structures, the only consideration is on splits
-from one into two tracks, e.g. a V-shape event, for instance due to two
+from one to many tracks, e.g. a V-shape event, for instance due to two
 electrons from the same vertex. They can run through the tracker together for
 quite some length and split up in two separate tracks at any point. Separate
 here means pixels are separated by at least one pixel in the Off state, i.e. a
@@ -132,21 +168,14 @@ half-tracker image in two parts, determine the number of structures in each
 separately, then move the cut and repeat. Cutting here take place along the 
 9 columns of the tracker. If at any point the number of structures on the left is
 different to the number of structures on the right then a split has
-occurred. As long as the split is merely from 1 to 2 structures or vice versa
-then this image segmentation algorithm creates two clusters and
-finishes. Anything more complicated has to be handled by the second cluster
-algorithm in order to avoid reaching any more byzantine case studies.
+occurred. Any split has to be handled by the graph cluster
+algorithm.
 
 Faulty geiger cells are considered to be set in an On state, i.e. always
 present as calibrated geiger hits for the algorithm to work and not create
 artificial gaps in cluster structures. The clusters are always overcomplete
 which means they can't loose any true cluster hits but can contain more than
-strictly needed. The merging for instance combines the two separate track hit
-collections with all the singly connected track hits to form two clusters
-containing a fraction (sometimes a very large fraction) of hits in common. Now
-there are two clusters hence from two presumed particles which contain a set
-of common geiger hits of which not all are likely to come from each
-particle. However, they could and hence those hits are in the cluster.
+strictly needed. 
 
 The smartness of making physics sense of the collection of geiger hits in a
 cluster is assumed to be introduced at a later stage in the reconstruction
@@ -154,7 +183,20 @@ chain. This clustering algorithm as the first stage tries to be as dumb as
 possible but with the certainty of not loosing any true hits under any
 circumstances. 
 
-## Algorithms: (B) Graph clustering for more complex cases
+## Algorithms: (B) ZClusterer
+
+A preliminary algorithm to utilize the z coordinate information in aid of 
+imagesegmentation. Should be simple to be robust. The current version serves
+to finish off the previous clustering in (A) as pre-filter. This algorithm
+seeks to find gaps in the collection of z-coordinate values for each labelled
+cluster. 
+
+Lacking a natural discretization as in the geiger cell grid, this
+algorithm uses a histogram discretization of z-values in order to detect such
+splits between values. This is attempted to be as safe as possible in order
+not to split structures unnecessarily.
+
+## Algorithms: (C) 3D Graph clustering
 
 Arriving at more complex clustering tasks, the same assumption of simplicity
 prevails, i.e. try not to be too smart but make certain not to loose the true
@@ -176,15 +218,18 @@ instance. Clustering can be made geometry agnostic and hence cover all cases
 for tracker structure clustering without bias, i.e. stay as dumb as possible.
 
 Transforming the tracker data into an abstract graph structure works as
-follows: (A) Perform one-dimensional clustering to abstract clumps of geiger
-hits into countable nodes. Here every one of the 9 tracker columns in each
-tracker-half is clustered separately into clumps of neighbouring rows of
-activated geiger hits.
-(B) Each integer pair of column number and node container index becomes a node
-in a graph structure. Edges or undirected connections between nodes are drawn
-in case they are neighbours in the tracker cell grid, i.e. in a neighbouring
-column and containing overlapping rows or at most one row shifted away up or
-down, i.e. neighbours on the diagonal.
+follows: (a) Consider each triggered geiger cell as a node in the graph and
+set up criteria for connectedness, i.e. when does one node count as connected
+to another. In 2D with the geiger cell grid that is quite easy but for a 3D
+node, z-information has to enter. Here a neighbour to a cell as to be one of
+the 8 grid neighbours and less than a maximum z distance away where the latter
+results from a survey of all sorted z coordinate values. It is at this stage
+that the z-filtering to find structure splits in z is important. The graph
+creation relies on working on a compact structure in all three coordinates.
+
+(b) Edges for the graph are then created between nodes with the help of a
+kdTree structure which is ideal to deliver nearest neighbours to a given point
+or data member. The collection of edges then creates the graph in 3D.
 
 Once there is a complete graph structure of a tracker event, the algorithm
 tries to determine start and end nodes of all possible shortest paths for that
@@ -197,6 +242,31 @@ grid is a candidate as is every singly connected node, i.e. a node with a
 single edge attached. The latter captures all cases where tracks start/end anywhere
 inside the tracker grid.
 
+Caution at the start-end point formation is important. Events in the tracker
+render the notion of what is a start and what an end meaningless. Tracks can
+come from anywhere and even curve such that some boundaries are never
+touched. For completeness hence all permutations of starts and ends including
+'dead-ends' are permitted. 
+
+However one further tracker property has to be taken into account here as a
+final point. Leaving individual geiger cells as autonomous entities at this
+stage would be wrong. The geiger cell tracker can simply not measure whether
+neighbouring(!) cells were triggered by a single or multiple particles. When
+forming clusters, each clusters is supposed to belong to a single particle
+hence neighbouring geiger cells should keep that feature of being
+neighbours and allowed to show up in several clusters. 
+
+This is taken account of by performing one-dimensional clustering to abstract
+clumps of geiger hits into countable nodes, called lumped nodes in the
+code. Here every one of the 9 tracker
+columns in each tracker-half is clustered separately into clumps of
+neighbouring rows of activated geiger hits.
+
+While working with individual geiger cells as normal nodes, each node is 
+replaced in a final step by their corresponding lumped node of which they are
+a unique member. This is particularly important for determining start and end
+points for the cluster creation from paths in the graph.
+
 Forming a shortest path from start to end then is a purely abstract operation
 between nodes, i.e. no notion of geometry enters other than that nodes are neighbours
 hence are connected. The clustering doesn't know anything about
@@ -208,14 +278,7 @@ between nodes.
 
 Finishing off, all nodes in each shortest path cluster are transformed back
 into collections of tracker pixels and numbered as clusters in a map
-container, ready to be turned back into geiger hit collections by the utility
-function image2gg. 
-
-## ZClusterer
-A preliminary algorithm to utilize the z coordinate information in aid of 
-imagesegmentation. Should be simple to be robust. Current version isn't 
-sufficient to finish off the previous clustering but will serve usefully in
-future version as pre-filter.
+container. 
 
 ## Utilities
 
@@ -254,6 +317,5 @@ segmentation is outsourced to a fixed and countable node container outside the
 graph object such that the identification of nodes can proceed entirely on the
 basis of indices originating from that node container.
 
-The image segmentation library requires no external libraries other than
-C++11 standard libraries for any of the objects it contains.
-
+The image segmentation library requires only ROOT as external library (for the
+kdTree object) as well as C++11 standard libraries for the objects it contains.

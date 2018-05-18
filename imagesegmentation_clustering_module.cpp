@@ -4,6 +4,7 @@
 // Standard library:
 #include <stdexcept>
 #include <iostream>
+
 // falaise
 #include <falaise/snemo/datamodels/data_model.h>
 
@@ -25,9 +26,6 @@ void imagesegmentation_clustering_module::initialize(const datatools::properties
   // check the label
   _TCD_label_ = snemo::datamodel::data_info::default_tracker_clustering_data_label();
 
-  // Clustering algorithm :
-  iseg = new ImageSegmentation(9,113); // tracker planes 113 by 9 by 2 sides
-
   eventCounter = 0;
   this->_set_initialized(true);
 
@@ -43,9 +41,7 @@ void imagesegmentation_clustering_module::reset()
   
   // clean up
   _TCD_label_.clear();
-  if (iseg) {
-    delete iseg;
-  }
+
   eventCounter = 0;
   std::cout << "Image segmentation clustering finished." << std::endl;
   return;
@@ -142,11 +138,21 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
     else
       gg_data_delayed.push_back(mi);
   }
-//   std::cout << "In process: gg_data size=" << gg_data.size() << std::endl;
-//   std::cout << "In process: gg_data_delayed size=" << gg_data_delayed.size() << std::endl;
+  std::cout << "In process: gg_data size=" << gg_data.size() << std::endl;
+  std::cout << "In process: gg_data_delayed size=" << gg_data_delayed.size() << std::endl;
 
+  // Library objects for clustering
   GG2ImageConverter g2i(18,113); // full sized tracker, 113 rows at 9 columns for 2 sides
-  ZClusterer clclean; // final step splitting in z and cleaning collection
+
+  // filter method (A)
+  ImageLabel ilab(9,113); // for prompt hits
+  ImageLabel ilab_d(9,113); // for delayed hits
+
+  // filter method (B)
+  ZClusterer clclean; // splitting in z
+
+  // clusterer
+  GraphClusterer3D gcl(9,113);
 
   // Prompt hits, Left Tracker
   //**************************
@@ -157,83 +163,49 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
     std::vector<bool> ll = g2i.getLeft();
     std::vector<bool> rr = g2i.getRight();
 
-    // pre-filter on z divisions
-    ImageLabel ilab(9,113);
+    // pre-filter
     ilab.label(ll); // left side
     std::unordered_map<unsigned int, std::list<Pixel> > labels_left = ilab.getLabels();
     ilab.label(rr); // right side
     std::unordered_map<unsigned int, std::list<Pixel> > labels_right = ilab.getLabels();
+    std::cout << "In process: label left cluster size=" << labels_left.size() << std::endl;
+    std::cout << "In process: label right cluster size=" << labels_right.size() << std::endl;
 
     // back to meta info
     if (labels_left.size()>0) {
+      // pre-filter on z splits
       std::unordered_map<unsigned int, std::vector<MetaInfo> > label_cls_left = g2i.image2gg(gg_data, labels_left, 0);
       clclean.init(label_cls_left);
       clclean.setZResolution(20.0); // [mm] z resolution
-      clclean.zSplitter(); // method A for clean up
+      clclean.zSplitter(); // find z split
       label_cls_left = clclean.getClusters(); // overwrite collection
-
-      // print this
-//       std::cout << "after zSplitter:" << std::endl;
-//       std::cout << "N clusters: " << label_cls_left.size() << std::endl;
-//       for (auto& entry : label_cls_left) {
-// 	std::cout << "key=" << entry.first << " => " << '\n';
-// 	milist = entry.second;
-// 	for (MetaInfo& mi: milist)
-// 	  std::cout << mi.side << " " << mi.row << " " << mi.column << " " << mi.z << std::endl;
-//       }
+      std::cout << "In process: after clclean, left size=" << label_cls_left.size() << std::endl;
 
       // for each pre clustered
-      for (auto& entry: label_cls_left) {
-	g2i.gg2image(entry.second);
-	ll = g2i.getLeft(); // are on the left side
-
-	// using the clusterer, first on left side
-	iseg->cluster(ll);
-	std::unordered_map<unsigned int, std::list<Pixel> > cls_left = iseg->getClusters();
-	if (cls_left.size()>0) {
-	  // get clusters for left tracker (side=0)
-	  std::unordered_map<unsigned int, std::vector<MetaInfo> > clusters_ll = g2i.image2gg(gg_data, cls_left, 0);
-
-	  // store in clustering solution
-	  _translate(the_calibrated_data, clustering_solution, clusters_ll, delayed);
-	}
+      gcl.cluster(label_cls_left);
+      std::unordered_map<unsigned int, std::vector<MetaInfo> > clusters_ll = gcl.getClusters();
+      std::cout << "In process: after graph3D, left size=" << clusters_ll.size() << std::endl;
+      if (clusters_ll.size()>0) {
+	// store in clustering solution
+	_translate(the_calibrated_data, clustering_solution, clusters_ll, delayed);
       }
     }
-
-    // Prompt hits, Right Tracker
+    
+    // Right Tracker
     //***************************
     if (labels_right.size()>0) {
       std::unordered_map<unsigned int, std::vector<MetaInfo> > label_cls_right = g2i.image2gg(gg_data, labels_right, 1);
       clclean.init(label_cls_right);
-      //      clclean.setZResolution(10.0); // [mm] z resolution
-      clclean.zSplitter(); // method A for clean up
+      clclean.zSplitter(); // find z split
       label_cls_right = clclean.getClusters(); // overwrite collection
+      std::cout << "In process: after clclean, right size=" << label_cls_right.size() << std::endl;
 
-      // print this
-//       std::cout << "after zSplitter:" << std::endl;
-//       std::cout << "N clusters: " << label_cls_right.size() << std::endl;
-//       for (auto& entry : label_cls_right) {
-// 	std::cout << "key=" << entry.first << " => " << '\n';
-// 	milist = entry.second;
-// 	for (MetaInfo& mi: milist)
-// 	  std::cout << mi.side << " " << mi.row << " " << mi.column << " " << mi.z << std::endl;
-//       }
-
-      // for each pre clustered
-      for (auto& entry: label_cls_right) {
-	g2i.gg2image(entry.second);
-	rr = g2i.getRight();
-
-	// using the clusterer, then right (side=1)
-	iseg->cluster(rr);
-	std::unordered_map<unsigned int, std::list<Pixel> > cls_right = iseg->getClusters();
-	if (cls_right.size()>0) {
-	  // get clusters
-	  std::unordered_map<unsigned int, std::vector<MetaInfo> > clusters_rr = g2i.image2gg(gg_data, cls_right, 1);
-
-	  // store in clustering solution
-	  _translate(the_calibrated_data, clustering_solution, clusters_rr, delayed);
-	}
+      gcl.cluster(label_cls_right);
+      std::unordered_map<unsigned int, std::vector<MetaInfo> > clusters_rr = gcl.getClusters();
+      std::cout << "In process: after graph3D, right size=" << clusters_rr.size() << std::endl;
+      if (clusters_rr.size()>0) {
+	// store in clustering solution
+	_translate(the_calibrated_data, clustering_solution, clusters_rr, delayed);
       }
     }    
   }
@@ -246,8 +218,7 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
     std::vector<bool> ll_delayed = g2i.getLeft();
     std::vector<bool> rr_delayed = g2i.getRight();
 
-    // pre-filter on z divisions
-    ImageLabel ilab_d(9,113);
+    // pre-filter
     ilab_d.label(ll_delayed); // left side
     std::unordered_map<unsigned int, std::list<Pixel> > labels_left_d = ilab_d.getLabels();
     ilab_d.label(rr_delayed); // right side
@@ -257,50 +228,31 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
     if (labels_left_d.size()>0) {
       std::unordered_map<unsigned int, std::vector<MetaInfo> > label_cls_left_d = g2i.image2gg(gg_data_delayed, labels_left_d, 0);
       clclean.init(label_cls_left_d);
-      clclean.zSplitter(); // method A for clean up
+      clclean.zSplitter(); // find z split
       label_cls_left_d = clclean.getClusters(); // overwrite collection
 
       // for each pre clustered
-      for (auto& entry: label_cls_left_d) {
-	g2i.gg2image(entry.second);
-	ll_delayed = g2i.getLeft(); // are on the left side
-
-	// using the clusterer, first on left side
-	iseg->cluster(ll_delayed);
-	std::unordered_map<unsigned int, std::list<Pixel> > cls_left_delayed = iseg->getClusters();
-	if (cls_left_delayed.size()>0) {
-	  // get clusters
-	  std::unordered_map<unsigned int, std::vector<MetaInfo> > clusters_ll_delayed = g2i.image2gg(gg_data_delayed, cls_left_delayed, 0);
-	  
-	  // store in clustering solution
-	  _translate(the_calibrated_data, clustering_solution, clusters_ll_delayed, delayed);
-	}
+      gcl.cluster(label_cls_left_d);
+      std::unordered_map<unsigned int, std::vector<MetaInfo> > clusters_ll_delayed = gcl.getClusters();
+      if (clusters_ll_delayed.size()>0) {
+	// store in clustering solution
+	_translate(the_calibrated_data, clustering_solution, clusters_ll_delayed, delayed);
       }
     }
 
-    // Delayed hits, Right Tracker
+    // Right Tracker
     //***************************
     if (labels_right_d.size()>0) {
       std::unordered_map<unsigned int, std::vector<MetaInfo> > label_cls_right_d = g2i.image2gg(gg_data_delayed, labels_right_d, 1);
       clclean.init(label_cls_right_d);
-      clclean.zSplitter(); // method A for clean up
+      clclean.zSplitter(); // find z split
       label_cls_right_d = clclean.getClusters(); // overwrite collection
 
-      // for each pre clustered
-      for (auto& entry: label_cls_right_d) {
-	g2i.gg2image(entry.second);
-	rr_delayed = g2i.getRight();
-
-	// using the clusterer, then right (side=1)
-	iseg->cluster(rr_delayed);
-	std::unordered_map<unsigned int, std::list<Pixel> > cls_right_delayed = iseg->getClusters();
-	if (cls_right_delayed.size()>0) {
-	  // get clusters
-	  std::unordered_map<unsigned int, std::vector<MetaInfo> > clusters_rr_delayed = g2i.image2gg(gg_data_delayed, cls_right_delayed, 1);
-
-	  // store in clustering solution
-	  _translate(the_calibrated_data, clustering_solution, clusters_rr_delayed, delayed);
-	}
+      gcl.cluster(label_cls_right_d);
+      std::unordered_map<unsigned int, std::vector<MetaInfo> > clusters_rr_delayed = gcl.getClusters();
+      if (clusters_rr_delayed.size()>0) {
+	// store in clustering solution
+	_translate(the_calibrated_data, clustering_solution, clusters_rr_delayed, delayed);
       }
     }
   }
