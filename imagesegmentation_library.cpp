@@ -44,7 +44,6 @@ void GraphClusterer3D::cluster(std::unordered_map<unsigned int, std::vector<Meta
   MetaInfo newmi; // replacement meta info for original
   std::vector<MetaInfo> newhits; // contains replacement hits
   
-  unsigned int counter = 0; // loop counter
   std::unordered_map<unsigned int, std::vector<MetaInfo> > newcls;
   for (auto& entry : clusters) {
     std::cout << "cluster nr. " << entry.first << std::endl;
@@ -53,13 +52,12 @@ void GraphClusterer3D::cluster(std::unordered_map<unsigned int, std::vector<Meta
     zonly.clear();
     store.clear();
     vertices.clear();
-    counter++;
 
     std::vector<MetaInfo> cluster = entry.second;
     side = cluster.at(0).side; // same for all metainfos in cluster
 
     if (cluster.size()<3) {
-      clustercopy[counter] = cluster; // rescue
+      clustercopy[clustercopy.size() + 1] = cluster; // rescue
       continue; // next in loop; leave as is
     }
 
@@ -76,7 +74,7 @@ void GraphClusterer3D::cluster(std::unordered_map<unsigned int, std::vector<Meta
     // turn vertices to countable nodes container
     int nn=0;
     for (auto& nd : vertices) {
-      std::cout << "GGHit Node " << nn << ": "<< nd.first.first << " " << nd.first.second << ", " << nd.second << std::endl;
+      //      std::cout << "GGHit Node " << nn << ": "<< nd.first.first << " " << nd.first.second << ", " << nd.second << std::endl;
       nodes.push_back(nd);
       nn++;
     }    
@@ -89,7 +87,7 @@ void GraphClusterer3D::cluster(std::unordered_map<unsigned int, std::vector<Meta
       double slope = zonly[j] - zonly[j-1];
       if (fabs(slope) > maxdifference) maxdifference = fabs(slope);
     }
-    std::cout << "max z difference: " << maxdifference << std::endl;
+    //    std::cout << "max z difference: " << maxdifference << std::endl;
 
     //***
     // lump nodes in 1D
@@ -109,14 +107,14 @@ void GraphClusterer3D::cluster(std::unordered_map<unsigned int, std::vector<Meta
     // edges require neighbour search with limited z distance
     //    std::cout << "store size: " << store.size() << std::endl;
     if (store.size()<2) {  // just one lumped node - no graph possible
-      clustercopy[counter] = cluster; // rescue
-      std::cout << "store single lumped node." << std::endl;
+      clustercopy[clustercopy.size() + 1] = cluster; // rescue
+      //      std::cout << "store single lumped node." << std::endl;
       continue;  // next in loop; leave as is
     }
 
     newcls = cluster_withgraph(maxdifference);
 
-    vertices.clear();
+    vertices.clear(); // recycle
     //***
     // replace all nodes in clusters with lumped nodes
     // since they  belong together - will create plenty of identical clusters
@@ -158,7 +156,7 @@ void GraphClusterer3D::cluster(std::unordered_map<unsigned int, std::vector<Meta
 
     for (auto& cl : newcls) {
       std::vector<MetaInfo> hits = cl.second;
-      clustercopy[clustercopy.size() + 1] = hits;
+      clustercopy[clustercopy.size() + 1] = hits; // store away to safety
     }
 
     // sweeep leftovers
@@ -183,12 +181,12 @@ void GraphClusterer3D::cluster(std::unordered_map<unsigned int, std::vector<Meta
 	newmi.row    = nd.first.second;
 	newmi.z      = nd.second;
 	unclustered.push_back(newmi);
-	std::cout << "found leftover" << " " << newmi.column << " " << newmi.row << " " << newmi.z << std::endl;
+	//	std::cout << "found leftover" << " " << newmi.column << " " << newmi.row << " " << newmi.z << std::endl;
       }
       leftover = true;
     }
     if (!unclustered.empty()) { // add to container
-      clustercopy[clustercopy.size() + 1] = unclustered;
+      clustercopy[clustercopy.size() + 1] = unclustered;  // store away to safety
       unclustered.clear();
     }
   } 
@@ -196,7 +194,7 @@ void GraphClusterer3D::cluster(std::unordered_map<unsigned int, std::vector<Meta
   //***
   // finish analysing clusters
   clusters.clear();
-  counter = 1;
+  unsigned int counter = 1; // loop counter
   for (auto& cl : clustercopy) {
     std::vector<MetaInfo> hits = cl.second;
 //     for (auto& minfo : hits)
@@ -232,12 +230,12 @@ std::vector<std::vector<int> > GraphClusterer3D::cluster1D(std::vector<int>& nod
   }
   lumped.push_back(nd); // save the final node collection
 
-  for (int nn=0;nn<lumped.size();nn++) {
-    std::cout << "lumped nodes nr. " << nn << std::endl;
-    for (int id : lumped[nn])
-      std::cout << "id=" << id << " ";
-    std::cout << std::endl;
-  }
+//   for (int nn=0;nn<lumped.size();nn++) {
+//     std::cout << "lumped nodes nr. " << nn << std::endl;
+//     for (int id : lumped[nn])
+//       std::cout << "id=" << id << " ";
+//     std::cout << std::endl;
+//   }
 
   return lumped;
 }
@@ -325,14 +323,14 @@ std::unordered_map<unsigned int, std::vector<MetaInfo> > GraphClusterer3D::clust
   preventLumped(pathstarts);
   preventLumped(pathtargets);
 
-  std::cout << "All starts index: ";
-  for (int idx : pathstarts)
-    std::cout << idx << " ";
-  std::cout << std::endl;
-  std::cout << "All targets index: ";
-  for (int idx : pathtargets)
-    std::cout << idx << " ";
-  std::cout << std::endl;
+//   std::cout << "All starts index: ";
+//   for (int idx : pathstarts)
+//     std::cout << idx << " ";
+//   std::cout << std::endl;
+//   std::cout << "All targets index: ";
+//   for (int idx : pathtargets)
+//     std::cout << idx << " ";
+//   std::cout << std::endl;
 
   // find paths from starts to targets to form clusters  
   std::list<std::vector<std::vector<int> > > tempCluster;
@@ -650,7 +648,7 @@ void GraphClusterer3D::remove_copies() {
       counter++; // new key
     }
   }
-  std::cout << "cluster size " << clusters.size() << " and after copy removal " << newcls.size() << std::endl;
+  //  std::cout << "cluster size " << clusters.size() << " and after copy removal " << newcls.size() << std::endl;
   for (auto& entry : newcls)  {
 //     for (auto& hit : entry.second)
 //       std::cout << "in remove copies - nr " << entry.first << " " << hit.column << " " << hit.row << " " << hit.z << std::endl;
@@ -1094,13 +1092,13 @@ void ZClusterer::zSplit(unsigned int clsid, std::vector<MetaInfo>& cls) {
   if (i<6) return; // not enough data points to fill rough histogram
   double start = allz.min();
   double end   = allz.max();
-  std::cout << "zSplit, start z " << start << " end " << end << std::endl;
+  //  std::cout << "zSplit, start z " << start << " end " << end << std::endl;
   
   // Case 1: check all z values on global gap  
   double zlimit = histogramSplit(allz, start, end);
 
   if (zlimit != DUMMY) {
-    std::cout << "case 1: zlimit = " << zlimit << std::endl;
+    //    std::cout << "case 1: zlimit = " << zlimit << std::endl;
     zSplitCluster(clsid, zlimit);
     return;
   }
