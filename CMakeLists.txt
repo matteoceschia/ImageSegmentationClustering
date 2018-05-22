@@ -52,6 +52,10 @@ target_link_libraries(graphtrial PUBLIC Catch ISegAlgorithm)
 add_executable(cleanuptrial testing/cleanuptrial.cpp)
 target_link_libraries(cleanuptrial PUBLIC Catch ISegAlgorithm)
 
+# add test executable
+add_executable(fittrial testing/fittrial.cpp)
+target_link_libraries(fittrial PUBLIC Catch ISegAlgorithm)
+
 # CTest comand
 add_test(NAME trial
   COMMAND trial -s
@@ -63,4 +67,8 @@ add_test(NAME graphtrial
 
 add_test(NAME cleanuptrial
   COMMAND cleanuptrial -s
+)
+
+add_test(NAME fittrial
+  COMMAND fittrial -s
 )
