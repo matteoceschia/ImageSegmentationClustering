@@ -1434,12 +1434,20 @@ bool SimpleFit::fithelix(unsigned int clsid)
 void SimpleFit::selectClusters()
 {
   // convert individual clusters into TGraph2DErrors objects for fitting
-  int clsid;
+  unsigned int clsid;
+  unsigned int clsize;
   int counter = 0;
 
   for (auto& entry : clusters) {
     clsid = entry.first;
+    clsize = entry.second.size();
     std::cout << "selectClusters: start on clsid " << clsid << std::endl;
+    // sanity check
+    if (clsize < 2) {
+      std::cout << "keep but no fit: clsize " << clsize << std::endl;
+      accept.push_back(clsid);
+      continue;
+    }
     tgraph->Set((int)entry.second.size()); // set size
 
     counter = 0;
@@ -1453,7 +1461,7 @@ void SimpleFit::selectClusters()
     bool lineok  = fitline(clsid); // store results as data members
     bool helixok = false;
     bool storecls = false;
-    if (fabs(bfield)>0)
+    if (fabs(bfield)>0 && clsize > 2) // at least 3 hits for helix
       helixok = fithelix(clsid); // trial values for reasonable helix?
 
     // store all fit results for all fitted clusters
