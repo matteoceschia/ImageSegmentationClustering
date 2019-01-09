@@ -167,5 +167,5 @@ TEST_CASE( "Cluster B", "[falaise][graphtest][nclustersB]" ) {
 }
 
 TEST_CASE( "Cluster C", "[falaise][graphtest][nclustersC]" ) {
-  REQUIRE( pattern3() == 8 );
+  REQUIRE( pattern3() == 7 );
 }
