@@ -2,7 +2,7 @@
 
 
 Yorck Ramachers (Warwick)
-Last updated May 4, 2018
+Last updated January 9, 2019
 
 The ImageSegmentation module is a reconstruction module. It attempts to
 cluster tracker hits and fill the TCD data bank in Falaise in the current
@@ -78,12 +78,8 @@ tracker hits as prompt or delayed, configurably with the delay time threshold)
 is already implemented by the digitization hence hits can simply be split at the
 start into prompt or delayed as they are read in from the 'CD' data bank. 
 
-This implementation method also avoids having to use the outsourcing of
-functionality to a driver class which outsources functionality again to an
-algorithm source. This appears to be a relic from the early days of the
-'channel' pattern and is not really required anymore. Here, the module 
-process() method is employed to actually do work and then call the algorithm
-object itself rather than bringing in a redundant middle-man 'driver'
+This implementation uses the module process() method to actually do work and then 
+call the algorithm object itself rather than bringing in a middle-man 'driver'
 object. 
 
 This module also attempts a first use of the Catch test framework for Falaise
@@ -93,7 +89,7 @@ structure nor the embedding of this module into flreconstruct.
 ## Cluster process:
 
 Two filters simplify clustering tasks before the main clustering algorithm, 
-currently the 3D graphclustering algorithm, finishes the process. Algorithm
+the 3D graphclustering algorithm, processes the data. Algorithm
 (A) filters the image of a tracker event as projected in the x-y-plane. This
 is a natural projection since the resulting grid is made of the tracker cells
 themselves, a 113 by 9 image for each tracker half.
@@ -279,6 +275,38 @@ between nodes.
 Finishing off, all nodes in each shortest path cluster are transformed back
 into collections of tracker pixels and numbered as clusters in a map
 container. 
+
+## Algorithms: (D) Simple Fit Filter
+
+This filter is the first bit of the algorithm that is not(!) geometry 
+agnostic. Too many special cases of clusters pass the graph clusterer 
+which are either not due to a single particle or should be broken up into 
+simpler segments. It is at this point that simple geometry assumptions 
+help a lot with progress. Fortunately, expected structures in SuperNEMO 
+are simple, lines and helices and it is these two assumptions that finish 
+of the clustering by filtering non-acceptable clusters at this stage.
+
+Note that fitting here takes place in the simplest possible way and has 
+nothing to do with subsequent track fitting algorithms. The purpose is 
+quite different and so are the methods. ROOT fitting is employed on image 
+data, i.e. tracker pixels. No geiger cell radius information is used. The 
+fitted data consists of integer pixel coordinates with cell size error 
+bars in x, y and z, all stored in a TGraphErrors object. A line and a 
+helix (in case a magnetic field is set) are fit and the fit assessed as 
+mildly acceptable or not. 
+
+Bad structures passing to this level of 
+clustering fail fitting in most cases or are fit extremely badly. 
+Therefore the quality criterion to filter clusters is quite mild but with 
+respect to structures that should not progress, it is in fact quite harsh. 
+The simple fit filter hence ends the clustering and all surviving clusters 
+are stored in the TCD data bank. Unclustered hits are by definition of the 
+clusterer not possible. 
+
+As stated at the beginning, purity of clustering 
+is not the target. Purification, getting rid of surplus or wrong clusters 
+is meant to take place later. This clusterer should be relied on 
+that the true clusters are in the output set.
 
 ## Utilities
 
