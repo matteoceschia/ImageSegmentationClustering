@@ -155,13 +155,6 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
   GraphClusterer3D gcl(9,113);
   gcl.setZResolution(20.0); // [mm]
 
-  // Filter resulting clusters
-  SimpleFit sfit;
-  sfit.setThreshold(0.9); // acceptance threshold, from fit result ROOT::Fit::FitResult Prob()
-  sfit.setErrorXY(2.0); // index point error for tgraph fit
-  sfit.setOmega(0.1); // helix inverse radius parameter
-  sfit.setBfield(25.0); // set zero for lines only [G]
-
   // Prompt hits, Left Tracker
   //**************************
   if (gg_data.size()>0) { // work on prompt hits
@@ -194,11 +187,6 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
       std::unordered_map<unsigned int, std::vector<MetaInfo> > clusters_ll = gcl.getClusters();
       std::cout << "In process: after graph3D, left cluster size=" << clusters_ll.size() << std::endl;
       if (clusters_ll.size()>0) {
-	// filter on simple fits
-	sfit.init(clusters_ll);
-	sfit.selectClusters();
-	clusters_ll = sfit.getClusters(); // overwrite previous collection
-	std::cout << "In process: after SimpleFit, left cluster size=" << clusters_ll.size() << std::endl;
 	// store in clustering solution
 	_translate(the_calibrated_data, clustering_solution, clusters_ll, delayed);
       }
@@ -217,11 +205,6 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
       std::unordered_map<unsigned int, std::vector<MetaInfo> > clusters_rr = gcl.getClusters();
       std::cout << "In process: after graph3D, right cluster size=" << clusters_rr.size() << std::endl;
       if (clusters_rr.size()>0) {
-	// filter on simple fits
-	sfit.init(clusters_rr);
-	sfit.selectClusters();
-	clusters_rr = sfit.getClusters(); // overwrite previous collection
-	std::cout << "In process: after SimpleFit, right cluster size=" << clusters_rr.size() << std::endl;
 	// store in clustering solution
 	_translate(the_calibrated_data, clustering_solution, clusters_rr, delayed);
       }
@@ -253,10 +236,6 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
       gcl.cluster(label_cls_left_d);
       std::unordered_map<unsigned int, std::vector<MetaInfo> > clusters_ll_delayed = gcl.getClusters();
       if (clusters_ll_delayed.size()>0) {
-	// filter on simple fits
-	sfit.init(clusters_ll_delayed);
-	sfit.selectClusters();
-	clusters_ll_delayed = sfit.getClusters(); // overwrite previous collection
 	// store in clustering solution
 	_translate(the_calibrated_data, clustering_solution, clusters_ll_delayed, delayed);
       }
@@ -273,10 +252,6 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
       gcl.cluster(label_cls_right_d);
       std::unordered_map<unsigned int, std::vector<MetaInfo> > clusters_rr_delayed = gcl.getClusters();
       if (clusters_rr_delayed.size()>0) {
-	// filter on simple fits
-	sfit.init(clusters_rr_delayed);
-	sfit.selectClusters();
-	clusters_rr_delayed = sfit.getClusters(); // overwrite previous collection
 	// store in clustering solution
 	_translate(the_calibrated_data, clustering_solution, clusters_rr_delayed, delayed);
       }
