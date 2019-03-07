@@ -138,8 +138,8 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
     else
       gg_data_delayed.push_back(mi);
   }
-  std::cout << "In process: gg_data size=" << gg_data.size() << std::endl;
-  std::cout << "In process: gg_data_delayed size=" << gg_data_delayed.size() << std::endl;
+  //  std::cout << "In process: gg_data size=" << gg_data.size() << std::endl;
+  //  std::cout << "In process: gg_data_delayed size=" << gg_data_delayed.size() << std::endl;
 
   // Library objects for clustering
   GG2ImageConverter g2i(18,113); // full sized tracker, 113 rows at 9 columns for 2 sides
@@ -153,18 +153,20 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
 
   // clusterer
   GraphClusterer3D gcl(9,113);
+  gcl.setZResolution(20.0); // [mm]
 
   // Filter resulting clusters
   SimpleFit sfit;
   sfit.setThreshold(0.9); // acceptance threshold, from fit result ROOT::Fit::FitResult Prob()
+  sfit.setErrorXY(2.0); // index point error for tgraph fit
   sfit.setOmega(0.1); // helix inverse radius parameter
   sfit.setBfield(25.0); // set zero for lines only [G]
 
   // Prompt hits, Left Tracker
   //**************************
   if (gg_data.size()>0) { // work on prompt hits
-//     for (MetaInfo& entry : gg_data)
-//       std::cout << "Cluster Entry: (" << entry.side << ", " << entry.column << ", " << entry.row << ")" << std::endl;
+    // for (MetaInfo& entry : gg_data)
+    //   std::cout << "Cluster Entry: (" << entry.side << ", " << entry.column << ", " << entry.row << ")" << std::endl;
     g2i.gg2image(gg_data);
     std::vector<bool> ll = g2i.getLeft();
     std::vector<bool> rr = g2i.getRight();
@@ -185,17 +187,18 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
       clclean.setZResolution(20.0); // [mm] z resolution
       clclean.zSplitter(); // find z split
       label_cls_left = clclean.getClusters(); // overwrite collection
-      std::cout << "In process: after clclean, left size=" << label_cls_left.size() << std::endl;
+      std::cout << "In process: after clclean, left cluster size=" << label_cls_left.size() << std::endl;
 
       // for each pre clustered
       gcl.cluster(label_cls_left);
       std::unordered_map<unsigned int, std::vector<MetaInfo> > clusters_ll = gcl.getClusters();
-      std::cout << "In process: after graph3D, left size=" << clusters_ll.size() << std::endl;
+      std::cout << "In process: after graph3D, left cluster size=" << clusters_ll.size() << std::endl;
       if (clusters_ll.size()>0) {
 	// filter on simple fits
 	sfit.init(clusters_ll);
 	sfit.selectClusters();
 	clusters_ll = sfit.getClusters(); // overwrite previous collection
+	std::cout << "In process: after SimpleFit, left cluster size=" << clusters_ll.size() << std::endl;
 	// store in clustering solution
 	_translate(the_calibrated_data, clustering_solution, clusters_ll, delayed);
       }
@@ -208,16 +211,17 @@ dpp::base_module::process_status imagesegmentation_clustering_module::process(da
       clclean.init(label_cls_right);
       clclean.zSplitter(); // find z split
       label_cls_right = clclean.getClusters(); // overwrite collection
-      std::cout << "In process: after clclean, right size=" << label_cls_right.size() << std::endl;
+      std::cout << "In process: after clclean, right cluster size=" << label_cls_right.size() << std::endl;
 
       gcl.cluster(label_cls_right);
       std::unordered_map<unsigned int, std::vector<MetaInfo> > clusters_rr = gcl.getClusters();
-      std::cout << "In process: after graph3D, right size=" << clusters_rr.size() << std::endl;
+      std::cout << "In process: after graph3D, right cluster size=" << clusters_rr.size() << std::endl;
       if (clusters_rr.size()>0) {
 	// filter on simple fits
 	sfit.init(clusters_rr);
 	sfit.selectClusters();
 	clusters_rr = sfit.getClusters(); // overwrite previous collection
+	std::cout << "In process: after SimpleFit, right cluster size=" << clusters_rr.size() << std::endl;
 	// store in clustering solution
 	_translate(the_calibrated_data, clustering_solution, clusters_rr, delayed);
       }

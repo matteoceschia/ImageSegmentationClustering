@@ -44,7 +44,7 @@ int check_z_separation()
 
   ZClusterer clclean;
   clclean.init(clscollection); // data stored and all prepared
-  clclean.setZResolution(6.0);
+  clclean.setZResolution(3.0);
   clclean.zSplitter(); // method A for clean up
   std::unordered_map<unsigned int, std::vector<MetaInfo> > clsPartA =  clclean.getClusters();
   return extract(clsPartA); // should be 7 entries

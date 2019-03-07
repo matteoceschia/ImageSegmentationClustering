@@ -120,6 +120,7 @@ private:
   int side;
   int width;
   int height;
+  double zres;
   std::set<GGHit> vertices; // unique nodes set
   std::vector<GGHit> nodes; // countable container for indexing
   std::set<std::pair<GGHit, GGHit> > edges; // node connections
@@ -145,6 +146,7 @@ public:
     side = 0;
     width=w; 
     height=h;
+    zres = 10.0;
   }
   ~GraphClusterer3D() {
     finalcls.clear();
@@ -153,6 +155,7 @@ public:
     vertices.clear();
     edges.clear();
   }
+  void setZResolution(double res) {zres = res;} // resolution in z [mm]
 
   void cluster(std::unordered_map<unsigned int, std::vector<MetaInfo> >& cls);
   std::unordered_map<unsigned int, std::vector<MetaInfo> > getClusters() {return finalcls;}
@@ -223,7 +226,7 @@ public:
 
   // init and setting functions
   void init(std::unordered_map<unsigned int, std::vector<MetaInfo> >& cls); // full info clusters
-  void setZResolution(double res) {stepwidth = res*0.5;} // half resolution in z
+  void setZResolution(double res) {stepwidth = res;} // resolution in z
 
   // action functions
   void zSplitter(); // remove projection effects for clusters from image

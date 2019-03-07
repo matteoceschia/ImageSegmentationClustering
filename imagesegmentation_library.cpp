@@ -49,7 +49,7 @@ void GraphClusterer3D::cluster(std::unordered_map<unsigned int, std::vector<Meta
   
   std::unordered_map<unsigned int, std::vector<MetaInfo> > newcls;
   for (auto& entry : clusters) {
-    std::cout << "cluster nr. " << entry.first << std::endl;
+    //    std::cout << "cluster nr. " << entry.first << std::endl;
     nodes.clear();
     edges.clear();
     zonly.clear();
@@ -91,6 +91,7 @@ void GraphClusterer3D::cluster(std::unordered_map<unsigned int, std::vector<Meta
       if (fabs(slope) > maxdifference) maxdifference = fabs(slope);
     }
     //    std::cout << "max z difference: " << maxdifference << std::endl;
+    if (maxdifference < 2*zres) maxdifference = 2 * zres; // +- z resolution enforcement
 
     //***
     // lump nodes in 1D
@@ -200,8 +201,8 @@ void GraphClusterer3D::cluster(std::unordered_map<unsigned int, std::vector<Meta
   unsigned int counter = 1; // loop counter
   for (auto& cl : clustercopy) {
     std::vector<MetaInfo> hits = cl.second;
-//     for (auto& minfo : hits)
-//       std::cout << "in clustercopy - nr " << counter << " " << minfo.column << " " << minfo.row << " " << minfo.z << std::endl;
+    // for (auto& minfo : hits)
+    //   std::cout << "in clustercopy - nr " << counter << " " << minfo.column << " " << minfo.row << " " << minfo.z << std::endl;
     clusters[counter] = hits;
     counter++;
   }
@@ -218,7 +219,7 @@ std::vector<std::vector<int> > GraphClusterer3D::cluster1D(std::vector<int>& nod
   int row = nodes[nodeindex[0]].first.second; // row of first lumped node
   double z= nodes[nodeindex[0]].second; // z of first lumped node
   for (int& idx : nodeindex) {
-    if (fabs(nodes[idx].first.second - row) < 2 && fabs(nodes[idx].second - z) < maxdiff+0.1) { // nearest neighbour
+    if (fabs(nodes[idx].first.second - row) < 2 && fabs(nodes[idx].second - z) < maxdiff+2*zres) { // nearest neighbour
       nd.push_back(idx); // first entry is trivially in
       row = nodes[idx].first.second; // set to new comparison
       z   = nodes[idx].second;
@@ -269,15 +270,15 @@ std::unordered_map<unsigned int, std::vector<MetaInfo> > GraphClusterer3D::clust
   std::vector<int> dead_ends = all_deadends(gg);
   std::vector<int> starts = column_nodes(gg, 0); // column 0 for starts
   std::vector<int> targets = column_nodes(gg, width-1); // column width-1 for targets
-//   for (int idx : dead_ends)
-//      std::cout << "dead_end index: " << idx << " ";
-//    std::cout << std::endl;
-//   for (int idx : starts)
-//     std::cout << "starts index: " << idx << " ";
-//   std::cout << std::endl;
-//   for (int idx : targets)
-//     std::cout << "targets index: " << idx << " ";
-//   std::cout << std::endl;
+  // for (int idx : dead_ends)
+  //   std::cout << "dead_end index: " << idx << " ";
+  // std::cout << std::endl;
+  // for (int idx : starts)
+  //   std::cout << "starts index: " << idx << " ";
+  // std::cout << std::endl;
+  // for (int idx : targets)
+  //   std::cout << "targets index: " << idx << " ";
+  // std::cout << std::endl;
 
   // curving paths to consider
   if (targets.empty()) {
@@ -300,12 +301,12 @@ std::unordered_map<unsigned int, std::vector<MetaInfo> > GraphClusterer3D::clust
     if (!nextcolumn.empty())
       starts = nextcolumn;
   }
-//   for (int idx : starts)
-//     std::cout << "starts index: " << idx << " ";
-//   std::cout << std::endl;
-//   for (int idx : targets)
-//     std::cout << "targets index: " << idx << " ";
-//   std::cout << std::endl;
+  // for (int idx : starts)
+  //   std::cout << "starts index: " << idx << " ";
+  // std::cout << std::endl;
+  // for (int idx : targets)
+  //   std::cout << "targets index: " << idx << " ";
+  // std::cout << std::endl;
 
   // curving paths to consider again; complete bending inside tracker
   starts.insert(starts.end(), targets.begin(), targets.end());
@@ -326,14 +327,14 @@ std::unordered_map<unsigned int, std::vector<MetaInfo> > GraphClusterer3D::clust
   preventLumped(pathstarts);
   preventLumped(pathtargets);
 
-//   std::cout << "All starts index: ";
-//   for (int idx : pathstarts)
-//     std::cout << idx << " ";
-//   std::cout << std::endl;
-//   std::cout << "All targets index: ";
-//   for (int idx : pathtargets)
-//     std::cout << idx << " ";
-//   std::cout << std::endl;
+  // std::cout << "All starts index: ";
+  // for (int idx : pathstarts)
+  //   std::cout << idx << " ";
+  // std::cout << std::endl;
+  // std::cout << "All targets index: ";
+  // for (int idx : pathtargets)
+  //   std::cout << idx << " ";
+  // std::cout << std::endl;
 
   // find paths from starts to targets to form clusters  
   std::list<std::vector<std::vector<int> > > tempCluster;
@@ -477,7 +478,7 @@ bool GraphClusterer3D::is_neighbour(GGHit start, GGHit target, double maxdiff) {
 
   // check grid x-y
   if (fabs(ppstart.first-pptarget.first) < 2 && fabs(ppstart.second-pptarget.second) < 2) // one grid place only
-    if (fabs(zstart-ztarget) < 3*maxdiff+0.1)    // closer than max z difference
+    if (fabs(zstart-ztarget) < maxdiff+2*zres)    // closer than max z difference
       return true;
   return false;
 }
@@ -496,8 +497,8 @@ std::vector<int> GraphClusterer3D::all_deadends(Graph gg) {
   std::vector<int> xwallspecial = check_xwall(gg);
   if (xwallspecial.size()) { // combine with ends
     ends.insert(ends.end(), xwallspecial.begin(), xwallspecial.end());
-//     for (int xw : xwallspecial)
-//       std::cout << "from xwall: " << xw << " ";
+    // for (int xw : xwallspecial)
+    //   std::cout << "from xwall: " << xw << " ";
   }
   //  std::cout << std::endl;
   return ends;
@@ -614,10 +615,10 @@ void GraphClusterer3D::remove_copies() {
     }
     std::sort(starter.begin(), starter.end());
     
-//     std::cout << " visited key " << key1 << " " << std::endl;
-//     std::cout << "\nstarter from " << key1 <<std::endl;
-//     for (auto& pp : starter) std::cout << "x=" << pp.first << " y=" << pp.second << " ";
-//     std::cout << std::endl;
+    // std::cout << " visited key " << key1 << " " << std::endl;
+    // std::cout << "\nstarter from " << key1 <<std::endl;
+    // for (auto& pp : starter) std::cout << "x=" << pp.first << " y=" << pp.second << " ";
+    // std::cout << std::endl;
     
     for (auto& comparator : clusters) { // to the rest in the container
       findit = std::find(visited.begin(), visited.end(), comparator.first);
@@ -653,8 +654,8 @@ void GraphClusterer3D::remove_copies() {
   }
   //  std::cout << "cluster size " << clusters.size() << " and after copy removal " << newcls.size() << std::endl;
   for (auto& entry : newcls)  {
-//     for (auto& hit : entry.second)
-//       std::cout << "in remove copies - nr " << entry.first << " " << hit.column << " " << hit.row << " " << hit.z << std::endl;
+    // for (auto& hit : entry.second)
+    //   std::cout << "in remove copies - nr " << entry.first << " " << hit.column << " " << hit.row << " " << hit.z << std::endl;
     finalcls[entry.first] = entry.second; // store the cleaned copy
   }
 }
@@ -1152,7 +1153,7 @@ void ZClusterer::zSplitCluster(unsigned int id, double zlimit) {
 
 double ZClusterer::histogramSplit(std::valarray<double>& allz, double start, double end) {
   // discretize z-axis
-  int nbins = floor(fabs(end - start)/100.0)>4 ? floor(fabs(end - start)/100.0) : 4; // coarse histogram resolution in z, min. 5
+  int nbins = floor(fabs(end - start)/100.0)>4 ? floor(fabs(end - start)/100.0-1) : 4; // coarse histogram resolution in z, min. 4
   double step = floor(fabs(end - start) / nbins);
   
   if (fabs((end - start)) / stepwidth <= 8.0) return DUMMY; // z coordinate error size = flat in z, no split
@@ -1166,8 +1167,8 @@ double ZClusterer::histogramSplit(std::valarray<double>& allz, double start, dou
   }
 
   // check
-//   for (int bin : histogram)
-//     std::cout << "histoSplit, bin " << bin << std::endl;
+  // for (int bin : histogram)
+  //   std::cout << "histoSplit, bin " << bin << std::endl;
   
   double zlimit = splitFinder(histogram); // find detectable absolute gap in z
   if (zlimit != DUMMY) {
@@ -1367,12 +1368,13 @@ bool SimpleFit::fitline(unsigned int clsid)
   ROOT::Math::Functor fcn(sdist,4);
   
   // set the function and the initial parameter values
+  int npoints = tgraph->GetN();
   double* tx=tgraph->GetX();
   double* ty=tgraph->GetY();
   double* tz=tgraph->GetZ();
-  double dx = tx[1] - tx[0];
-  double dy = ty[1] - ty[0];
-  double dz = tz[1] - tz[0];
+  double dx = tx[npoints-1] - tx[0];
+  double dy = ty[npoints-1] - ty[0];
+  double dz = tz[npoints-1] - tz[0];
   double xysl = dy/dx; // slopes on projections
   double xzsl = dz/dx;
   double xyi = ty[0] - tx[0]*xysl; // intercepts
@@ -1441,10 +1443,11 @@ void SimpleFit::selectClusters()
   for (auto& entry : clusters) {
     clsid = entry.first;
     clsize = entry.second.size();
-    std::cout << "selectClusters: start on clsid " << clsid << std::endl;
+    // std::cout << "selectClusters: start on clsid " << clsid << std::endl;
+    // std::cout << "selectClusters: clsize " << clsize << std::endl;
     // sanity check
-    if (clsize < 2) {
-      std::cout << "keep but no fit: clsize " << clsize << std::endl;
+    if (clsize < 3) {
+      //      std::cout << "keep but no fit: clsize " << clsize << std::endl;
       accept.push_back(clsid);
       continue;
     }
@@ -1453,7 +1456,10 @@ void SimpleFit::selectClusters()
     counter = 0;
     for (auto& mi : entry.second) {
       tgraph->SetPoint(counter, (double)mi.column, (double)mi.row, mi.z);
-      tgraph->SetPointError(counter, errxy, errxy, errz);
+      if (clsize>30)
+	tgraph->SetPointError(counter, 3*errxy, 3*errxy, 3*errz); // worse prob on long clusters
+      else
+	tgraph->SetPointError(counter, errxy, errxy, errz);
       counter++;
     }
 
@@ -1467,13 +1473,23 @@ void SimpleFit::selectClusters()
     // store all fit results for all fitted clusters
     if (lineok) {
       goodLineFits.push_back(std::make_pair(clsid, LineResult));
-      if (LineResult.prob() >= threshold && LineResult.covstatus()==3) // clean fit
+      if (LineResult.prob() >= threshold && LineResult.covstatus()>=2) { // clean fit
+	//	std::cout << "lineok - pass threshold and covstatus " << std::endl;
 	storecls = true;
+      }
+      else 
+       	std::cout << "lineok: fails threshold " << LineResult.prob() << " or covstatus " << LineResult.covstatus() << std::endl;
+
     }
     if (helixok) {
       goodHelixFits.push_back(std::make_pair(clsid, HelixResult));
-      if (HelixResult.prob() >= threshold && HelixResult.covstatus()==3)// clean fit
+      if (HelixResult.prob() >= threshold && HelixResult.covstatus()>=2) { // clean fit
+	//	std::cout << "helixok - pass threshold and covstatus " << std::endl;
 	storecls = true;
+      }
+      else
+       	std::cout << "helixok: fails threshold " << HelixResult.prob() << " or covstatus " << HelixResult.covstatus() << std::endl;
+
     }
     // test acceptance
     if (storecls)

@@ -13,7 +13,7 @@ int pattern1()
 // 			             {1,0,0,1,0},
 // 			             {0,0,0,0,1}};
   //side, row, column, z = metainfo
-  int extract(std::unordered_map<unsigned int, std::vector<MetaInfo> >& cls);
+  int extract(std::unordered_map<unsigned int, std::vector<MetaInfo> >& cls, int which);
   double inputcls[13][4]       = {{1,0,4,  0.0},
 			          {1,1,2, -2.0},
 			          {1,1,3, -1.0},
@@ -43,10 +43,10 @@ int pattern1()
   int w = 5;
   int h = 6;
   GraphClusterer3D gcl(w,h);
-
+  gcl.setZResolution(0.4);
   gcl.cluster(clscollection);
   std::unordered_map<unsigned int, std::vector<MetaInfo> > cls = gcl.getClusters();
-  return extract(cls); // should be 9
+  return extract(cls,1); // should be 9
 }
 
 
@@ -59,18 +59,18 @@ int pattern2()
 // 			             {0,0,0,0,1},
 // 			             {0,0,0,0,0}};
   //side, row, column, z = metainfo
-  int extract(std::unordered_map<unsigned int, std::vector<MetaInfo> >& cls);
-  double inputcls2[11][4]      = {{1,1,0,  0.0},
-			          {1,1,1,  2.0},
-			          {1,1,2,  6.0},
-			          {1,1,3, 10.5},
-			          {1,1,4, 14.0},
-			          {1,2,0, -0.5},
-			          {1,2,1,-110.0},
-			          {1,2,2,-235.0},
-			          {1,2,3,-350.0},
-			          {1,2,4,-476.0},
-			          {1,3,4,-488.0}};
+  int extract(std::unordered_map<unsigned int, std::vector<MetaInfo> >& cls, int which);
+  double inputcls2[11][4]      = {{1,2,0,  0.0},
+			          {1,2,1,  2.0},
+			          {1,2,2,  6.0},
+			          {1,2,3, 10.5},
+			          {1,2,4, 14.0},
+			          {1,3,0, -0.5},
+			          {1,3,1,-110.0},
+			          {1,3,2,-235.0},
+			          {1,3,3,-350.0},
+			          {1,3,4,-476.0},
+			          {1,4,4,-488.0}};
 
   std::unordered_map<unsigned int, std::vector<MetaInfo> > clscollection;
   std::vector<MetaInfo> store;
@@ -87,10 +87,11 @@ int pattern2()
   int w = 5;
   int h = 6;
   GraphClusterer3D gcl(w,h);
+  gcl.setZResolution(1.0);
 
   gcl.cluster(clscollection);
   std::unordered_map<unsigned int, std::vector<MetaInfo> > cls = gcl.getClusters();
-  return extract(cls); // should be 7
+  return extract(cls,1); // should be 7
 }
 
 
@@ -103,7 +104,7 @@ int pattern3() // dead-end branch test
 // 			             {1,0,0,1,0},
 // 			             {0,0,0,0,1}};
   //side, row, column, z = metainfo
-  int extract(std::unordered_map<unsigned int, std::vector<MetaInfo> >& cls);
+  int extract(std::unordered_map<unsigned int, std::vector<MetaInfo> >& cls, int which);
   double inputcls[12][4]       = {{1,0,2, -1.0},
 			          {1,1,3, -1.0},
 			          {1,0,3, -0.5},
@@ -132,20 +133,21 @@ int pattern3() // dead-end branch test
   int w = 5;
   int h = 6;
   GraphClusterer3D gcl(w,h);
+  gcl.setZResolution(1.0);
 
   gcl.cluster(clscollection);
   std::unordered_map<unsigned int, std::vector<MetaInfo> > cls = gcl.getClusters();
-  return extract(cls); // should be 8
+  return extract(cls,6); // should be 8
 }
 
 
-int extract(std::unordered_map<unsigned int, std::vector<MetaInfo> >& cls) {
+int extract(std::unordered_map<unsigned int, std::vector<MetaInfo> >& cls, int which) {
   // access map
   int nentries=0;
   std::vector<MetaInfo> milist;
   for (auto& entry : cls) {
     std::cout << "key = " << entry.first << std::endl;
-    if (entry.first == 1) { // cluster number
+    if (entry.first == which) { // cluster number
       milist = entry.second;
       nentries = (int)milist.size();
     }
@@ -159,7 +161,7 @@ int extract(std::unordered_map<unsigned int, std::vector<MetaInfo> >& cls) {
 
 
 TEST_CASE( "Cluster A", "[falaise][graphtest][nclustersA]" ) {
-  REQUIRE( pattern1() == 9 );
+  REQUIRE( pattern1() == 13 );
 }
 
 TEST_CASE( "Cluster B", "[falaise][graphtest][nclustersB]" ) {
@@ -167,5 +169,5 @@ TEST_CASE( "Cluster B", "[falaise][graphtest][nclustersB]" ) {
 }
 
 TEST_CASE( "Cluster C", "[falaise][graphtest][nclustersC]" ) {
-  REQUIRE( pattern3() == 7 );
+  REQUIRE( pattern3() == 9 );
 }
